@@ -192,3 +192,25 @@ suite('scoring/dedupeRefs', () => {
     assert.deepStrictEqual(dedupeRefs([{ file: '' }]), []);
   });
 });
+
+suite('scoring/reason tidying', () => {
+  test('drops reasons a stronger reason already implies', () => {
+    const ranked = rankSuspects({
+      primaryErrorFile: { file: 'src/a.ts', line: 3 },
+      errorRefs: [{ file: 'src/a.ts', line: 3 }],
+      terminalRefs: [{ file: 'src/a.ts' }]
+    });
+
+    assert.deepStrictEqual(ranked[0].reasons, ['Named by the primary error']);
+  });
+
+  test('keeps independent reasons', () => {
+    const ranked = rankSuspects({
+      primaryErrorFile: { file: 'src/a.ts' },
+      gitChangedFiles: ['src/a.ts']
+    });
+
+    assert.ok(ranked[0].reasons.includes('Named by the primary error'));
+    assert.ok(ranked[0].reasons.includes('Modified in the working tree'));
+  });
+});

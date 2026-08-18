@@ -667,7 +667,7 @@ export function dedupeErrors(records: ExtractedError[], limit = 20): ExtractedEr
   const out: ExtractedError[] = [];
 
   for (const record of records) {
-    const key = `${record.severity}|${record.code ?? ''}|${normalizeMessage(record.message)}|${record.file ?? ''}`;
+    const key = `${record.severity}|${record.code ?? ''}|${displayKey(record.message)}|${record.file ?? ''}`;
     if (seen.has(key)) {
       continue;
     }
@@ -697,8 +697,28 @@ export function rankErrors(records: ExtractedError[]): ExtractedError[] {
 }
 
 /**
+ * Dedupe key for *display*.
+ *
+ * Deliberately lighter than `normalizeMessage`: quoted literals are kept,
+ * because `Type 'string' is not assignable to type 'number'` and
+ * `Type 'number' is not assignable to type 'string'` are two different
+ * problems that a brief must list separately. Only the values that genuinely
+ * repeat without meaning - line numbers, offsets, counts - are collapsed.
+ */
+export function displayKey(message: string): string {
+  return message
+    .trim()
+    .replace(/\b\d+\b/g, '<n>')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+/**
  * Strips the variable parts of a message so that two runs of the same failure
  * hash to the same fingerprint: numbers, quoted literals, paths, and hex ids.
+ *
+ * Lossier than `displayKey` on purpose: for fingerprinting, the same failure
+ * about a different file or symbol should still count as a repeat.
  */
 export function normalizeMessage(message: string): string {
   return message

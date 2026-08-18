@@ -221,6 +221,17 @@ export function rankSuspects(evidence: SuspectEvidence, options: RankingOptions 
     pushReason(entry, 'Modified in the working tree');
   }
 
+  // When the failure output named files, a file known only from ambient editor
+  // diagnostics is not a suspect - it is background noise that happens to be
+  // open. It still appears in the diagnostics section of the brief.
+  if (hasOutputEvidence) {
+    for (const [key, entry] of accumulators) {
+      if (!entry.corroborated) {
+        accumulators.delete(key);
+      }
+    }
+  }
+
   return finalize(accumulators, { limit, minScore, ignoredSegments: options.ignoredSegments ?? [] });
 }
 
@@ -260,13 +271,35 @@ function finalize(
     results.push({
       file: entry.file,
       score: Math.round(score),
-      reasons,
+      reasons: tidyReasons(reasons),
       line: entry.line
     });
   }
 
   results.sort((a, b) => (b.score !== a.score ? b.score - a.score : a.file.localeCompare(b.file)));
   return results.slice(0, options.limit);
+}
+
+/**
+ * Removes reasons that a stronger reason already implies. Being "named by the
+ * primary error" says everything that "named by a parsed error" and "mentioned
+ * in the failure output" would add.
+ */
+function tidyReasons(reasons: string[]): string[] {
+  const implied: Record<string, string[]> = {
+    'Named by the primary error': ['Named by a parsed error', 'Mentioned in the failure output'],
+    'Named by a parsed error': ['Mentioned in the failure output'],
+    'Passed to the failing command': ['Mentioned in the failure output']
+  };
+
+  const drop = new Set<string>();
+  for (const reason of reasons) {
+    for (const weaker of implied[reason] ?? []) {
+      drop.add(weaker);
+    }
+  }
+
+  return reasons.filter((reason) => !drop.has(reason));
 }
 
 /**

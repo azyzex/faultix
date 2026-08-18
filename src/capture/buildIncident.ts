@@ -25,7 +25,7 @@ import { dedupeRefs, rankSuspects } from '../analyze/scoring';
 import type { FileRef } from '../analyze/scoring';
 import type { FaultixConfig } from '../core/config';
 import type { Incident, IncidentTrigger } from '../core/models';
-import { redactWithReport } from '../privacy/redact';
+import { anonymizeHomePaths, redactWithReport } from '../privacy/redact';
 import type { ErrorView } from '../output/templates';
 import { snapshotDiagnostics } from './diagnosticsCapture';
 import { readSnippets } from './snippets';
@@ -53,15 +53,16 @@ export async function buildIncident(input: BuildIncidentInput): Promise<Incident
   const workspaceRoot = folder?.uri.fsPath;
 
   // 1. Make the terminal text readable, then remove anything secret from it.
+  //
+  // Home-path anonymization is deliberately NOT applied here. Analysis needs
+  // the real absolute paths a tool printed in order to resolve them on disk,
+  // read code context, and let the tree view open the right file. Anonymizing
+  // first would turn every stack frame into an unresolvable `<home>\...`.
+  // It is applied to the rendered excerpt at step 8 instead.
   const sanitized = sanitizeTerminalOutput(input.rawOutput ?? '');
   const redaction = config.redactSecrets
-    ? redactWithReport(sanitized, { anonymizeHome: config.anonymizePaths, redactEmails: config.redactEmails })
+    ? redactWithReport(sanitized, { anonymizeHome: false, redactEmails: config.redactEmails })
     : { text: sanitized, counts: {}, total: 0 };
-
-  const excerpt = truncateChars(
-    excerptLines(redaction.text, config.maxTerminalLines),
-    Math.floor(config.maxChars * 0.6)
-  );
 
   // 2. Classify the failure.
   const kind = input.kindOverride ?? deriveKind(input, redaction.text);
@@ -124,7 +125,18 @@ export async function buildIncident(input: BuildIncidentInput): Promise<Incident
     primaryFile: primary?.file ? displayPath(workspaceRoot, resolver.toAbsolute(primary.file) ?? primary.file) : undefined
   });
 
-  const summary = summarizeFailure(redaction.text, input.titleOverride ?? deriveTitle(input));
+  // 8. Render-time privacy: now that every path has been resolved, the excerpt
+  //    can have the home directory stripped without costing anything.
+  const excerpt = truncateChars(
+    excerptLines(
+      config.anonymizePaths ? anonymizeHomePaths(redaction.text) : redaction.text,
+      config.maxTerminalLines
+    ),
+    Math.floor(config.maxChars * 0.6)
+  );
+
+  const rawSummary = summarizeFailure(redaction.text, input.titleOverride ?? deriveTitle(input));
+  const summary = config.anonymizePaths ? anonymizeHomePaths(rawSummary) : rawSummary;
   const createdAt = new Date().toISOString();
 
   return {

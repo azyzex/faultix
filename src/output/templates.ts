@@ -360,7 +360,10 @@ export function buildRepairPrompt(view: IncidentView): string {
     }
   }
 
-  const errors = (view.errors ?? []).filter((e) => e !== view.primaryError);
+  // Compared by value, not identity: the primary error is rebuilt separately
+  // from the list, so reference equality would never hold and the root cause
+  // would be printed twice.
+  const errors = (view.errors ?? []).filter((e) => !isSameError(e, view.primaryError));
   if (errors.length) {
     push(`## Other reported problems (${errors.length})`, '');
     for (const error of errors.slice(0, 15)) {
@@ -422,7 +425,9 @@ export function formatErrorLine(error: ErrorView): string {
   if (error.severity === 'warning') {
     parts.push('`WARN`');
   }
-  if (error.code) {
+  // Exception-style messages already begin with their type ("TypeError: ..."),
+  // so prefixing the code would render it twice.
+  if (error.code && !error.message.startsWith(error.code)) {
     parts.push(`\`${error.code}\``);
   }
   parts.push(oneLine(error.message));
@@ -433,6 +438,16 @@ export function formatErrorLine(error: ErrorView): string {
   }
 
   return parts.join(' ');
+}
+
+/** Two error records describe the same problem when message and place agree. */
+export function isSameError(a: ErrorView | undefined, b: ErrorView | undefined): boolean {
+  if (!a || !b) {
+    return false;
+  }
+  // Deliberately ignores code and column: the same problem is sometimes
+  // reported once with a diagnostic code and once without.
+  return a.message === b.message && a.file === b.file && a.line === b.line;
 }
 
 function escapePipes(s: string): string {
