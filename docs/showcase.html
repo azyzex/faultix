@@ -1,0 +1,771 @@
+<title>Faultix</title>
+<style>
+  /* ---- Tokens -------------------------------------------------------
+     Light is the base set. Dark is redefined twice: once for the
+     un-stamped system-preference state, once for an explicit toggle. */
+  :root {
+    --ground: #f5f5f8;
+    --panel: #ffffff;
+    --panel-sunk: #ecedf2;
+    --ink: #191922;
+    --ink-soft: #4a4a5c;
+    --ink-faint: #7c7c92;
+    --rule: #dcdce6;
+    --rule-strong: #c3c3d2;
+
+    --accent: #d1541a;
+    --accent-soft: #fbe9df;
+    --critical: #c02b34;
+    --critical-soft: #fbe4e5;
+    --signal: #2f7d52;
+    --signal-soft: #e2f1e8;
+
+    --shadow: 0 1px 2px rgba(25, 25, 34, .06), 0 8px 24px -12px rgba(25, 25, 34, .18);
+
+    --mono: ui-monospace, "SFMono-Regular", "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+    --measure: 66ch;
+    --gutter: 4.5rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #131319;
+      --panel: #1b1b23;
+      --panel-sunk: #101016;
+      --ink: #ecedf4;
+      --ink-soft: #b0b0c2;
+      --ink-faint: #7e7e94;
+      --rule: #2b2b36;
+      --rule-strong: #3c3c4a;
+
+      --accent: #ff8a4c;
+      --accent-soft: #33200f;
+      --critical: #f36b70;
+      --critical-soft: #331416;
+      --signal: #5cbf88;
+      --signal-soft: #10251a;
+
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 30px -14px rgba(0, 0, 0, .7);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #131319;
+    --panel: #1b1b23;
+    --panel-sunk: #101016;
+    --ink: #ecedf4;
+    --ink-soft: #b0b0c2;
+    --ink-faint: #7e7e94;
+    --rule: #2b2b36;
+    --rule-strong: #3c3c4a;
+
+    --accent: #ff8a4c;
+    --accent-soft: #33200f;
+    --critical: #f36b70;
+    --critical-soft: #331416;
+    --signal: #5cbf88;
+    --signal-soft: #10251a;
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 30px -14px rgba(0, 0, 0, .7);
+  }
+
+  /* ---- Base --------------------------------------------------------- */
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16.5px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: 0 1.5rem 6rem;
+  }
+
+  /* The spine: a stack-trace gutter running the length of the page.
+     Section markers sit on it, so the rule carries structure rather
+     than decorating the margin. */
+  .spine {
+    position: relative;
+    padding-left: var(--gutter);
+  }
+  .spine::before {
+    content: "";
+    position: absolute;
+    left: calc(var(--gutter) - 2.25rem);
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: linear-gradient(to bottom, transparent, var(--rule) 4rem, var(--rule) calc(100% - 8rem), transparent);
+  }
+
+  @media (max-width: 720px) {
+    :root { --gutter: 0rem; }
+    .spine::before { display: none; }
+    .wrap { padding: 0 1.15rem 4rem; }
+  }
+
+  section { padding: 3.25rem 0; }
+
+  /* ---- Type --------------------------------------------------------- */
+  h1, h2, h3 {
+    font-family: var(--mono);
+    font-weight: 600;
+    letter-spacing: -.02em;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  h1 {
+    font-size: clamp(2.1rem, 6vw, 3.4rem);
+    line-height: 1.08;
+  }
+
+  h2 {
+    font-size: clamp(1.3rem, 3vw, 1.6rem);
+    line-height: 1.2;
+    margin-bottom: .4rem;
+  }
+
+  h3 {
+    font-size: 1rem;
+    letter-spacing: -.01em;
+  }
+
+  p { margin: 0 0 1.1rem; max-width: var(--measure); color: var(--ink-soft); }
+  p.lead { font-size: 1.16rem; color: var(--ink); max-width: 58ch; }
+  strong { color: var(--ink); font-weight: 620; }
+
+  a { color: var(--accent); text-underline-offset: .18em; text-decoration-thickness: 1px; }
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  .eyebrow {
+    position: absolute;
+    left: 0;
+    width: calc(var(--gutter) - 3.1rem);
+    text-align: right;
+    font-family: var(--mono);
+    font-size: .7rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    padding-top: .45rem;
+  }
+  @media (max-width: 720px) {
+    .eyebrow {
+      position: static;
+      width: auto;
+      text-align: left;
+      display: block;
+      margin-bottom: .5rem;
+      padding-top: 0;
+    }
+  }
+
+  .section-head { position: relative; margin-bottom: 1.5rem; }
+
+  /* ---- Hero --------------------------------------------------------- */
+  header { padding: 4.5rem 0 1rem; }
+
+  .mark {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    font-family: var(--mono);
+    font-size: .82rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 2rem;
+  }
+  .mark svg { display: block; }
+
+  .hero-sub {
+    font-size: 1.2rem;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    max-width: 46ch;
+    margin: 1.4rem 0 2rem;
+  }
+
+  .actions { display: flex; flex-wrap: wrap; gap: .7rem; align-items: center; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    font-family: var(--mono);
+    font-size: .85rem;
+    padding: .55rem 1rem;
+    border: 1px solid var(--rule-strong);
+    border-radius: 3px;
+    color: var(--ink);
+    text-decoration: none;
+    background: var(--panel);
+    transition: border-color .15s ease, color .15s ease;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--ground);
+    font-weight: 600;
+  }
+  .btn-primary:hover { color: var(--ground); filter: brightness(1.08); }
+
+  /* ---- Terminal panels ---------------------------------------------- */
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.1rem;
+    margin: 1.75rem 0 0;
+  }
+  @media (min-width: 900px) {
+    .compare { grid-template-columns: 1fr 1fr; }
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    padding: .6rem .85rem;
+    border-bottom: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: .72rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    background: var(--panel-sunk);
+  }
+
+  .tag {
+    font-family: var(--mono);
+    font-size: .68rem;
+    letter-spacing: .06em;
+    padding: .12rem .45rem;
+    border-radius: 2px;
+    text-transform: uppercase;
+  }
+  .tag-bad { background: var(--critical-soft); color: var(--critical); }
+  .tag-good { background: var(--signal-soft); color: var(--signal); }
+
+  pre {
+    margin: 0;
+    padding: .95rem .85rem;
+    font-family: var(--mono);
+    font-size: .74rem;
+    line-height: 1.62;
+    overflow-x: auto;
+    color: var(--ink-soft);
+    flex: 1;
+    tab-size: 2;
+  }
+  pre code { font: inherit; }
+
+  .esc { color: var(--ink-faint); opacity: .72; }
+  .err { color: var(--critical); }
+  .ok { color: var(--signal); }
+  .acc { color: var(--accent); }
+  .dim { color: var(--ink-faint); }
+  .focus-line { color: var(--ink); font-weight: 600; }
+  .focus-line::before { content: ""; }
+
+  /* ---- Pipeline ------------------------------------------------------ */
+  ol.pipeline {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0;
+    counter-reset: stage;
+  }
+  ol.pipeline li {
+    counter-increment: stage;
+    display: grid;
+    grid-template-columns: 2.5rem 1fr;
+    gap: 1rem;
+    padding: .85rem 0;
+    border-top: 1px solid var(--rule);
+    align-items: baseline;
+  }
+  ol.pipeline li:last-child { border-bottom: 1px solid var(--rule); }
+  ol.pipeline li::before {
+    content: counter(stage, decimal-leading-zero);
+    font-family: var(--mono);
+    font-size: .78rem;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
+  .stage-name {
+    font-family: var(--mono);
+    font-size: .92rem;
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .stage-desc { color: var(--ink-soft); font-size: .95rem; margin-top: .12rem; }
+
+  /* ---- Stats --------------------------------------------------------- */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    overflow: hidden;
+    margin-top: 1.5rem;
+  }
+  .stat { background: var(--panel); padding: 1rem .95rem; }
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: -.03em;
+    font-variant-numeric: tabular-nums;
+    display: block;
+    line-height: 1.1;
+  }
+  .stat-label {
+    font-size: .78rem;
+    color: var(--ink-faint);
+    margin-top: .3rem;
+    display: block;
+    line-height: 1.4;
+  }
+
+  /* ---- Rule cards ---------------------------------------------------- */
+  .cards { display: grid; gap: 1rem; grid-template-columns: 1fr; margin-top: 1.4rem; }
+  @media (min-width: 800px) { .cards { grid-template-columns: 1fr 1fr; } }
+
+  .card {
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: 1.1rem 1.15rem;
+    background: var(--panel);
+  }
+  .card h3 { margin-bottom: .35rem; }
+  .card p { font-size: .93rem; margin: 0; }
+
+  /* ---- Findings list -------------------------------------------------- */
+  ul.findings { list-style: none; margin: 1.2rem 0 0; padding: 0; display: grid; gap: .1rem; }
+  ul.findings li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: .75rem;
+    padding: .7rem 0;
+    border-top: 1px solid var(--rule);
+    font-size: .95rem;
+    color: var(--ink-soft);
+    align-items: baseline;
+  }
+  ul.findings li:last-child { border-bottom: 1px solid var(--rule); }
+  .bullet {
+    font-family: var(--mono);
+    font-size: .7rem;
+    color: var(--critical);
+    letter-spacing: .05em;
+  }
+  ul.findings code { color: var(--ink); }
+
+  code {
+    font-family: var(--mono);
+    font-size: .87em;
+    background: var(--panel-sunk);
+    padding: .08em .32em;
+    border-radius: 2px;
+  }
+
+  /* ---- Table --------------------------------------------------------- */
+  .table-scroll { overflow-x: auto; margin-top: 1.3rem; }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; min-width: 30rem; }
+  th, td { text-align: left; padding: .6rem .8rem .6rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th {
+    font-family: var(--mono);
+    font-size: .7rem;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 500;
+  }
+  td { color: var(--ink-soft); }
+  td:first-child { color: var(--ink); font-family: var(--mono); font-size: .84rem; white-space: nowrap; }
+
+  footer {
+    padding: 2.5rem 0 0;
+    border-top: 1px solid var(--rule);
+    margin-top: 2rem;
+    font-size: .88rem;
+    color: var(--ink-faint);
+  }
+  footer a { color: var(--ink-soft); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+  <div class="spine">
+
+    <header>
+      <div class="mark">
+        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" d="M13.6 2.2 6.8 12.4a.55.55 0 0 0 .46.86h3.02l-1.9 8.06a.36.36 0 0 0 .65.28l6.8-10.2a.55.55 0 0 0-.46-.86h-3.02l1.9-8.06a.36.36 0 0 0-.65-.28z"/>
+        </svg>
+        <span>Faultix &mdash; v0.2.1</span>
+      </div>
+
+      <h1>Your build broke.<br>Here is the brief.</h1>
+
+      <p class="hero-sub">
+        A local-first VS&nbsp;Code extension that watches for failing commands,
+        works out the root cause, and writes a brief you can hand straight to a
+        coding agent. No network calls, no telemetry.
+      </p>
+
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/azyzex/faultix">View the repository</a>
+        <a class="btn" href="https://github.com/azyzex/faultix/releases/tag/v0.2.1">Download v0.2.1</a>
+      </div>
+    </header>
+
+    <section>
+      <div class="section-head">
+        <span class="eyebrow">Problem</span>
+        <h2>Noise in, signal out</h2>
+      </div>
+
+      <p class="lead">
+        The usual move when something breaks is to scroll the terminal, select a
+        few hundred lines, and paste them into a chat window along with a guess
+        about what matters. The left panel is what a failing script actually
+        leaves in your scrollback. The right is what Faultix writes instead.
+      </p>
+
+      <div class="compare">
+        <div class="panel">
+          <div class="panel-head">
+            <span>raw terminal capture</span>
+            <span class="tag tag-bad">before</span>
+          </div>
+<pre><code><span class="esc">^[[6n^[[m^[[K</span>
+<span class="esc">^[[K</span>
+<span class="esc">^[]0;C:\Windows\System32\cmd.exe^G</span>
+<span class="esc">^[[?25h</span>Starting batch error demo
+<span class="esc">^[[31m</span>Divide by zero error.<span class="esc">^[[0m^[[K</span>
+'this_command_does_not_exist_12345' is
+not recognized as an internal or
+external command,<span class="esc">^[[K</span>
+operable program or batch file.<span class="esc">^[[K</span>
+progress: 10%<span class="esc">\r</span>progress: 55%<span class="esc">\r</span>progress: 100%
+<span class="esc">^[]633;D;1^G</span></code></pre>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <span>incident.md</span>
+            <span class="tag tag-good">after</span>
+          </div>
+<pre><code><span class="acc"># ZeroDivisionError: division by zero</span>
+<span class="acc">  (app/report.py:6)</span>
+
+<span class="dim">| **Kind**        |</span> Runtime error
+<span class="dim">| **Command**     |</span> python app.py
+<span class="dim">| **Exit code**   |</span> 1
+<span class="dim">| **Fingerprint** |</span> bc614b553120 <span class="err">(seen 3x)</span>
+
+<span class="dim">## Code context</span>
+
+  3 | def summarize(rows):
+  4 |     data = {"count": 0}
+  5 |     print("count:", data["count"])
+<span class="focus-line">&gt; 6 |     return 10 / data["count"]</span>
+  7 |
+  8 | summarize([])
+
+<span class="dim">## Files to inspect first</span>
+
+<span class="ok">- app/report.py:6</span> (score 177)
+  - Named by the primary error
+  - Modified in the working tree</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <span class="eyebrow">Method</span>
+        <h2>Eight stages, in order</h2>
+      </div>
+
+      <p>
+        Each stage feeds the next, so the numbering is the actual execution
+        order rather than a label. Everything from sanitize to render is pure
+        and free of VS&nbsp;Code APIs, which is what makes it testable without
+        launching an editor.
+      </p>
+
+      <ol class="pipeline">
+        <li>
+          <div>
+            <span class="stage-name">sanitize</span>
+            <div class="stage-desc">Strip ANSI colour, cursor movement, device-status queries, window titles and shell-integration markers. Collapse progress bars back to their final line.</div>
+          </div>
+        </li>
+        <li>
+          <div>
+            <span class="stage-name">redact</span>
+            <div class="stage-desc">Remove tokens, keys, passwords and URL credentials before anything is persisted. Twenty patterns, each with bounded quantifiers.</div>
+          </div>
+        </li>
+        <li>
+          <div>
+            <span class="stage-name">classify</span>
+            <div class="stage-desc">Decide what kind of failure this is and which toolchain produced it. The tool hint selects which parser gets first pick at the text.</div>
+          </div>
+        </li>
+        <li>
+          <div>
+            <span class="stage-name">extract</span>
+            <div class="stage-desc">Parse structured error records with per-toolchain matchers ranked by confidence, then pick the one that actually stopped the build.</div>
+          </div>
+        </li>
+        <li>
+          <div>
+            <span class="stage-name">resolve</span>
+            <div class="stage-desc">Turn every printed path &mdash; absolute, relative, <code>./</code>-prefixed, Windows or POSIX &mdash; into one canonical file inside the workspace.</div>
+          </div>
+        </li>
+        <li>
+          <div>
+            <span class="stage-name">rank</span>
+            <div class="stage-desc">Score the files worth opening first, weighing evidence by how directly the failure implicated it.</div>
+          </div>
+        </li>
+        <li>
+          <div>
+            <span class="stage-name">context</span>
+            <div class="stage-desc">Read the lines around each failure location so the brief carries the code, not just a reference to it.</div>
+          </div>
+        </li>
+        <li>
+          <div>
+            <span class="stage-name">fingerprint</span>
+            <div class="stage-desc">Hash the normalized command and primary error, so the same failure is recognised across runs and a brief can say &ldquo;seen six times&rdquo;.</div>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <span class="eyebrow">Design</span>
+        <h2>The interesting decision</h2>
+      </div>
+
+      <p class="lead">
+        Ranking suspects is where a tool like this earns its keep or becomes
+        noise. The rule that matters is <strong>corroboration</strong>.
+      </p>
+
+      <div class="cards">
+        <div class="card">
+          <h3>The failure mode</h3>
+          <p>
+            A workspace routinely has hundreds of open editor warnings that have
+            nothing to do with the command that just failed. Counting them as
+            evidence meant a warning-heavy config file could rank second for a
+            failing shell script &mdash; confidently pointing at the wrong file.
+          </p>
+        </div>
+        <div class="card">
+          <h3>The rule</h3>
+          <p>
+            Diagnostics count fully only when the failure output names the same
+            file. A file known <em>only</em> from ambient diagnostics is not
+            listed at all. When there is no output to corroborate against, they
+            become the primary signal instead.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Weighting</h3>
+          <p>
+            Named by the primary error scores highest, then command arguments,
+            then parsed errors with a decay down the list, then plain mentions.
+            Vendored and generated paths are multiplied down rather than
+            filtered, so they can still surface when nothing else does.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Precision over recall</h3>
+          <p>
+            Three good suspects beat fifteen plausible ones. An agent acts on
+            what it is handed, so a confident wrong answer costs more than a
+            short one.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <span class="eyebrow">Coverage</span>
+        <h2>Verified against real output</h2>
+      </div>
+
+      <p>
+        Root-cause extraction is tested against twenty-three recorded captures
+        from sixteen toolchains &mdash; real stdout and stderr, escape bytes and
+        all, not hand-written approximations. Adding a toolchain means recording
+        a fixture and stating what the root cause should be.
+      </p>
+
+      <div class="stats">
+        <div class="stat"><span class="stat-value">416</span><span class="stat-label">unit tests</span></div>
+        <div class="stat"><span class="stat-value">16</span><span class="stat-label">Extension&nbsp;Host tests</span></div>
+        <div class="stat"><span class="stat-value">93.6%</span><span class="stat-label">statement coverage of the core</span></div>
+        <div class="stat"><span class="stat-value">23</span><span class="stat-label">recorded fixtures</span></div>
+        <div class="stat"><span class="stat-value">0</span><span class="stat-label">runtime dependencies</span></div>
+        <div class="stat"><span class="stat-value">0</span><span class="stat-label">npm audit advisories</span></div>
+      </div>
+
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Toolchain</th><th>What the matcher recovers</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>tsc / MSBuild</td><td>Diagnostic code, message, file, line and column</td></tr>
+            <tr><td>Python</td><td>Exception type and the frame that raised, not the entry point</td></tr>
+            <tr><td>rustc</td><td>Error code from the header, location from the following arrow line</td></tr>
+            <tr><td>ESLint</td><td>Rule name, plus the file from the header line above the results</td></tr>
+            <tr><td>Jest / Vitest</td><td>The assertion detail rather than the suite name</td></tr>
+            <tr><td>PowerShell</td><td>The human sentence, not the structured CategoryInfo tail</td></tr>
+            <tr><td>cmd / bash</td><td>Command-not-found and parse errors with the script line</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <span class="eyebrow">Findings</span>
+        <h2>What the tests caught</h2>
+      </div>
+
+      <p>
+        Bugs the suite found in code that looked correct &mdash; the argument
+        for fixture-driven tests over mocks.
+      </p>
+
+      <ul class="findings">
+        <li>
+          <span class="bullet">&#9642;</span>
+          <span>The primary error appeared twice in every agent prompt: de-duplication compared object identity, which never held because the two records were built separately.</span>
+        </li>
+        <li>
+          <span class="bullet">&#9642;</span>
+          <span>Anonymizing home directories <em>before</em> analysis turned every stack frame into an unresolvable <code>&lt;home&gt;\…</code>, silently disabling code snippets and open-at-line. It now runs at render time.</span>
+        </li>
+        <li>
+          <span class="bullet">&#9642;</span>
+          <span>Treating <code>bin</code> as build output demoted real Rust sources in <code>src/bin</code>.</span>
+        </li>
+        <li>
+          <span class="bullet">&#9642;</span>
+          <span><code>expect(x).toBe(5)</code> parsed as the file <code>.toBe</code> at line&nbsp;5.</span>
+        </li>
+        <li>
+          <span class="bullet">&#9642;</span>
+          <span>A task named &ldquo;Run unit tests&rdquo; did not classify as a test, because the pattern only matched the singular.</span>
+        </li>
+        <li>
+          <span class="bullet">&#9642;</span>
+          <span>Every capture was recorded twice, so repeat counts advanced in steps of two. The integration test asserted &ldquo;at least&nbsp;2&rdquo; and passed anyway; it now measures an exact delta and was checked to fail when the bug is reintroduced.</span>
+        </li>
+        <li>
+          <span class="bullet">&#9642;</span>
+          <span><code>engines.vscode</code> claimed <code>^1.88</code> while the extension depends on an API finalized in&nbsp;1.93, because <code>@types/vscode</code> was allowed to float twenty minors past the declared floor.</span>
+        </li>
+      </ul>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <span class="eyebrow">Security</span>
+        <h2>Three things worth being careful about</h2>
+      </div>
+
+      <div class="cards">
+        <div class="card">
+          <h3>Output contains secrets</h3>
+          <p>
+            Failing commands print credentials: a CI token echoed by a script, a
+            database URL in a connection error. Twenty redaction patterns run
+            before anything is written, and each brief reports how much it
+            removed.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Settings are untrusted</h3>
+          <p>
+            A workspace carries its own <code>settings.json</code>, so the
+            output directory is resolved against the workspace root and refused
+            if it escapes &mdash; absolute, drive-qualified, UNC and
+            <code>..</code> alike. Asserted against the filesystem, not mocked.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Output is attacker-influenced</h3>
+          <p>
+            Lines are capped at 2,000 characters and 5,000 lines before matching,
+            and every pattern uses bounded quantifiers, so no input can trigger
+            catastrophic backtracking in the editor process.
+          </p>
+        </div>
+        <div class="card">
+          <h3>What it never does</h3>
+          <p>
+            No network calls and no telemetry &mdash; there is no HTTP client.
+            The only subprocess is <code>git</code>, with a fixed argument array
+            and a 1.5&nbsp;second timeout.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <p>
+        Faultix v0.2.1 &mdash; MIT licensed. Built with TypeScript, tested with
+        mocha and <code>@vscode/test-electron</code>, CI across Windows, macOS
+        and Linux on Node&nbsp;20 and&nbsp;22.
+        <a href="https://github.com/azyzex/faultix">github.com/azyzex/faultix</a>
+      </p>
+    </footer>
+
+  </div>
+</div>
