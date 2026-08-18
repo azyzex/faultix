@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to release
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+
+    # Exposed at job level so the publish step can test for its presence; a
+    # step-level env is not visible to that step's own `if` condition.
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Verify
+        run: npm run verify
+
+      - name: Check the tag matches package.json
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Tag v$TAG does not match package.json version $PKG"
+            exit 1
+          fi
+
+      - name: Build vsix
+        run: npm run package
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: faultix.vsix
+          generate_release_notes: true
+
+      # Publishing only happens when a Marketplace token is configured, so a
+      # fork or a repository without the secret still gets a working release.
+      - name: Publish to the VS Code Marketplace
+        if: env.VSCE_PAT != ''
+        run: npx vsce publish --packagePath faultix.vsix

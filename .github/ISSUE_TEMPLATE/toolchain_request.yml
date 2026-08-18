@@ -1,0 +1,31 @@
+name: Toolchain support
+description: Faultix did not find the root cause for a tool
+labels: [toolchain]
+body:
+  - type: input
+    id: tool
+    attributes:
+      label: Which tool
+      placeholder: gradle, deno, elixir...
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Real failure output
+      description: >
+        Paste the raw output, exactly as the tool printed it. This becomes a
+        test fixture, so verbatim matters more than tidy. Replace any personal
+        paths.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: expected
+    attributes:
+      label: What the root cause actually is
+      placeholder: "expected ';' at src/main.c:7"
+    validations:
+      required: true

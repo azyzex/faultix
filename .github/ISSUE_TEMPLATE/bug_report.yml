@@ -1,0 +1,41 @@
+name: Bug report
+description: Faultix did something wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did Faultix do, and what did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: brief
+    attributes:
+      label: The brief it produced
+      description: >
+        Paste the relevant part of `.ai-repair/latest/incident.md`.
+        Faultix redacts secrets, but please read it over before posting.
+      render: markdown
+
+  - type: input
+    id: command
+    attributes:
+      label: The command that failed
+      placeholder: npm test
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: Faultix 0.2.0, VS Code 1.95.0, Windows 11
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Output channel
+      description: Anything from the "Faultix" output channel.
+      render: shell

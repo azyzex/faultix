@@ -1,0 +1,25 @@
+# Source and build tooling: only out/ ships.
+src/**
+out/**/*.map
+out/test/**
+.vscode/**
+.vscode-test/**
+.github/**
+node_modules/**
+
+# Config
+tsconfig.json
+eslint.config.js
+.eslintrc*
+.gitattributes
+.gitignore
+.editorconfig
+package-lock.json
+
+# Docs that do not belong in the package
+CONTRIBUTING.md
+SECURITY.md
+docs/**
+*.vsix
+coverage/**
+.ai-repair/**
