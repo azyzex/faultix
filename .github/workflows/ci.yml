@@ -60,7 +60,7 @@ jobs:
       - run: npm ci
       - run: npm run test:coverage
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: coverage/
@@ -100,7 +100,7 @@ jobs:
             echo "::error::Source or test files leaked into the package"
             exit 1
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: faultix-vsix
           path: faultix.vsix
