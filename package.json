@@ -351,14 +351,15 @@
     "watch": "tsc -watch -p ./",
     "lint": "eslint .",
     "typecheck": "tsc -p ./ --noEmit",
-    "pretest": "npm run compile",
     "test": "npm run test:unit",
     "test:unit": "mocha --ui tdd \"out/test/suite/**/*.test.js\"",
-    "test:coverage": "c8 --reporter=text --reporter=lcov npm run test:unit",
+    "test:coverage": "c8 npm run test:unit",
     "test:integration": "node ./out/test/runTest.js",
     "verify": "npm run lint && npm run typecheck && npm run test:unit",
     "package": "vsce package --out faultix.vsix",
-    "publish": "vsce publish"
+    "publish": "vsce publish",
+    "pretest:unit": "npm run compile",
+    "pretest:integration": "npm run compile"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.6",

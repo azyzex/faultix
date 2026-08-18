@@ -83,7 +83,7 @@ control-code garbage.
 
 - The analysis core was extracted into `vscode`-free modules, making it unit
   testable without an Extension Host.
-- Test suite grew from 2 tests to 398, including 23 recorded failure fixtures
+- Test suite grew from 2 tests to 416, including 23 recorded failure fixtures
   and an end-to-end suite that renders a brief for every one of them.
 
 ## [0.1.0] - 2026-03-28

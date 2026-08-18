@@ -198,7 +198,7 @@ See [SECURITY.md](SECURITY.md) for the full threat model.
 
 ```bash
 npm install
-npm run verify           # lint, typecheck, and 398 unit tests
+npm run verify           # lint, typecheck, and 416 unit tests
 npm run test:integration # 16 tests in a real VS Code Extension Host
 npm run test:coverage   # coverage report
 npm run package         # build faultix.vsix
