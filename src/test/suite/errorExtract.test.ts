@@ -36,9 +36,9 @@ const EXPECTATIONS: Record<string, Expectation> = {
     fileIncludes: 'lint_demo_tmp.ts',
     line: 2
   },
-  'gcc-errors.txt': { messageIncludes: 'expected', fileIncludes: 'main.c', line: 7 },
+  'gcc-errors.txt': { messageIncludes: "expected ';' before 'return'", fileIncludes: 'main.c', line: 5 },
   'go-build.txt': { messageIncludes: 'undefined: fmtt', fileIncludes: 'main.go', line: 9 },
-  'javac-errors.txt': { messageIncludes: 'cannot find symbol', fileIncludes: 'Main.java', line: 5 },
+  'javac-errors.txt': { messageIncludes: 'package Systm does not exist', fileIncludes: 'Main.java', line: 3 },
   'jest-failures.txt': { messageIncludes: 'expect(received)', fileIncludes: 'sum.test.js' },
   'make-missing-separator.txt': { messageIncludes: 'missing separator', fileIncludes: 'Makefile', line: 4 },
   'msbuild-csharp.txt': { messageIncludes: '; expected', fileIncludes: 'Program.cs', line: 12, code: 'CS1002' },
@@ -51,7 +51,7 @@ const EXPECTATIONS: Record<string, Expectation> = {
   'py-runtime.txt': { messageIncludes: 'division by zero', fileIncludes: 'runtime_error.py', line: 6 },
   'py-syntax.txt': { messageIncludes: "expected ':'", fileIncludes: 'broken_syntax.py', line: 3 },
   'pytest-failures.txt': { messageIncludes: 'division by zero', fileIncludes: 'calc.py' },
-  'rustc-errors.txt': { messageIncludes: 'mismatched types', fileIncludes: 'main.rs', line: 4, code: 'E0308' },
+  'rustc-errors.txt': { messageIncludes: 'cannot find value', fileIncludes: 'main.rs', line: 3, code: 'E0425' },
   'sh-error.txt': { messageIncludes: 'unexpected EOF', fileIncludes: 'bad.sh', line: 4 },
   'tsc-errors.txt': { messageIncludes: "':' expected", fileIncludes: 'syntax_error.ts', line: 4, code: 'TS1005' },
   'tsc-type-errors.txt': { messageIncludes: 'Cannot find module', fileIncludes: 'import_errors.ts', code: 'TS2307' },
@@ -160,8 +160,12 @@ suite('errorExtract/extractFileRefs', () => {
   });
 
   test('reads rustc arrow locations', () => {
+    // Recorded on Windows, so cargo prints a backslash separator.
     const refs = extractFileRefs(clean('rustc-errors.txt'));
-    assert.ok(refs.some((r) => r.file === 'src/main.rs' && r.line === 4 && r.column === 18));
+    assert.ok(
+      refs.some((r) => r.file.replace(/\\/g, '/') === 'src/main.rs' && r.line === 3 && r.column === 20),
+      `expected src/main.rs:3:20, got ${refs.map((r) => `${r.file}:${r.line}:${r.column}`).join(', ')}`
+    );
   });
 
   test('reads paren-style locations', () => {

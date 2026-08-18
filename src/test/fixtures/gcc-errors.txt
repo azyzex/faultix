@@ -1,10 +1,10 @@
-src/main.c: In function ‘main’:
-src/main.c:7:5: error: expected ‘;’ before ‘return’
-    7 |     printf("hi")
-      |     ^
-src/main.c:9:12: warning: unused variable ‘count’ [-Wunused-variable]
-src/util.c:3:10: fatal error: missing_header.h: No such file or directory
-    3 | #include "missing_header.h"
-      |          ^~~~~~~~~~~~~~~~~~
-compilation terminated.
-make: *** [Makefile:8: build] Error 1
+main.c: In function 'main':
+main.c:5:17: error: expected ';' before 'return'
+    5 |     printf("hi")
+      |                 ^
+      |                 ;
+    6 |     return 0;
+      |     ~~~~~~       
+main.c:4:9: warning: unused variable 'count' [-Wunused-variable]
+    4 |     int count;
+      |         ^~~~~

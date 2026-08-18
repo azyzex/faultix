@@ -91,8 +91,29 @@ async function main(): Promise<void> {
     console.error(error);
     process.exitCode = 1;
   } finally {
-    fs.rmSync(workspace, { recursive: true, force: true });
+    await removeWorkspace(workspace);
   }
+}
+
+/**
+ * Removes the throwaway workspace, tolerating a busy directory.
+ *
+ * VS Code does not always release its handle on the workspace folder by the
+ * time the process exits, and on Windows that surfaces as EBUSY. The tests
+ * have already finished at this point, so a directory the OS will clean up
+ * later must never turn a passing run into a failing one.
+ */
+async function removeWorkspace(workspace: string): Promise<void> {
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      fs.rmSync(workspace, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+      return;
+    } catch {
+      await sleep(400 * attempt);
+    }
+  }
+
+  console.warn(`Could not remove the temporary workspace at ${workspace}; leaving it for the OS.`);
 }
 
 void main();
