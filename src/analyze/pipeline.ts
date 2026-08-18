@@ -98,6 +98,13 @@ export interface AnalyzeInput {
   diagnostics?: DiagnosticsInput;
   git?: GitEvidence;
 
+  /**
+   * What the run ledger knows about this failure and this command. Computed by
+   * the caller, because the ledger is persisted state rather than something
+   * derivable from this run.
+   */
+  history?: Incident['history'];
+
   /** Injectable clock, so fingerprints and ids are deterministic in tests. */
   now?: Date;
 }
@@ -242,6 +249,7 @@ export function analyzeFailure(input: AnalyzeInput): Incident {
     git: input.git?.insideWorkTree
       ? {
           branch: input.git.branch,
+          sha: input.git.sha,
           isDirty: input.git.isDirty,
           changedFiles: input.git.changedFiles,
           diffStat: input.git.diffStat
@@ -249,6 +257,7 @@ export function analyzeFailure(input: AnalyzeInput): Incident {
       : undefined,
 
     fingerprint,
+    history: input.history,
     redaction: redaction.total > 0 ? { total: redaction.total, counts: redaction.counts } : undefined
   };
 }

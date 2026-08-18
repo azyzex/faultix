@@ -340,6 +340,20 @@
           "default": true,
           "markdownDescription": "Show an unresolved-failure indicator in the status bar.",
           "order": 52
+        },
+        "faultix.history.recordRuns": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Record every build, test and run command, not just the failures. This is what lets Faultix tell you a failure went away, what you were editing when it did, and which commands are flaky. Writes `runs.json` alongside your briefs.",
+          "order": 20
+        },
+        "faultix.history.maxRuns": {
+          "type": "number",
+          "default": 500,
+          "minimum": 10,
+          "maximum": 10000,
+          "markdownDescription": "How many runs to remember.",
+          "order": 21
         }
       }
     }

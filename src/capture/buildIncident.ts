@@ -14,6 +14,14 @@ import * as vscode from 'vscode';
 import { analyzeFailure } from '../analyze/pipeline';
 import type { AnalysisOptions, AnalyzeInput } from '../analyze/pipeline';
 import { collectGitEvidence } from '../analyze/git';
+import {
+  commandKeyOf,
+  detectFlakyCommands,
+  findResolution,
+  lastPassingRun,
+  statsForCommand
+} from '../analyze/runLedger';
+import type { RunLedger } from '../analyze/runLedger';
 import type { IncidentKind } from '../analyze/classify';
 import type { FaultixConfig } from '../core/config';
 import type { Incident, IncidentTrigger } from '../core/models';
@@ -32,6 +40,8 @@ export interface BuildIncidentInput {
   /** Overrides the derived title, used by diagnostics-spike captures. */
   titleOverride?: string;
   kindOverride?: IncidentKind;
+  /** Recorded runs, used to answer "have I seen this before". */
+  ledger?: RunLedger;
 }
 
 /** Projects user settings onto the options the pipeline reads. */
@@ -80,5 +90,54 @@ export async function buildIncident(input: BuildIncidentInput): Promise<Incident
     git
   };
 
-  return analyzeFailure(analyzeInput);
+  const incident = analyzeFailure(analyzeInput);
+
+  // History depends on the fingerprint, which only exists once the incident has
+  // been assembled, so it is attached afterwards rather than passed in.
+  if (input.ledger && input.commandLine) {
+    incident.history = deriveHistory(input.ledger, input.commandLine, incident.fingerprint.signature);
+  }
+
+  return incident;
+}
+
+/** Summarizes what the ledger knows about this failure and this command. */
+export function deriveHistory(
+  ledger: RunLedger,
+  commandLine: string,
+  signature: string
+): Incident['history'] {
+  const key = commandKeyOf(commandLine);
+
+  const resolution = findResolution(ledger, signature);
+  const lastPass = lastPassingRun(ledger, key);
+  const stats = statsForCommand(ledger, key);
+  const flaky = detectFlakyCommands(ledger).find((candidate) => candidate.commandKey === key);
+
+  const history: NonNullable<Incident['history']> = {
+    priorFix: resolution
+      ? {
+          fixedAt: resolution.fixedAt,
+          likelyFixedBy: resolution.likelyFixedBy,
+          attempts: resolution.attempts,
+          commitsInBetween: resolution.commitsInBetween
+        }
+      : undefined,
+    lastPassedAt: lastPass?.at,
+    lastPassedSha: lastPass?.gitSha,
+    passRate: stats?.passRate,
+    totalRuns: stats?.runs,
+    flaky: flaky?.confidence
+  };
+
+  // Nothing worth saying is still nothing; keep the section off the brief
+  // entirely. Listed field by field rather than via Object.values, which
+  // erases optionality and would make the check look impossible.
+  const hasAnything =
+    history.priorFix !== undefined ||
+    history.lastPassedAt !== undefined ||
+    history.passRate !== undefined ||
+    history.flaky !== undefined;
+
+  return hasAnything ? history : undefined;
 }

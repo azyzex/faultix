@@ -93,6 +93,8 @@ export interface IncidentView {
 
   git?: {
     branch?: string;
+    /** Commit at capture time. Not rendered; used by the run ledger. */
+    sha?: string;
     isDirty?: boolean;
     changedFiles?: string[];
     diffStat?: string;
@@ -108,6 +110,32 @@ export interface IncidentView {
   redaction?: {
     total: number;
     counts: Record<string, number>;
+  };
+
+  /**
+   * What the run ledger knows about this failure and this command.
+   *
+   * This is the part an agent cannot work out for itself: it starts cold each
+   * session and only sees the run it just performed.
+   */
+  history?: {
+    /** The last time this exact failure went away, and what changed then. */
+    priorFix?: {
+      fixedAt: string;
+      /** Files being edited when it went away. A heuristic; see runLedger. */
+      likelyFixedBy: string[];
+      attempts: number;
+      /** True when commits landed too, so the file list is incomplete. */
+      commitsInBetween: boolean;
+    };
+    /** When this command last succeeded, for "what changed since". */
+    lastPassedAt?: string;
+    lastPassedSha?: string;
+    /** Share of runs of this command that passed, 0..1. */
+    passRate?: number;
+    totalRuns?: number;
+    /** Set when this command has disagreed with itself. */
+    flaky?: 'high' | 'low';
   };
 }
 
@@ -180,6 +208,44 @@ export function renderSnippet(snippet: CodeSnippet): string[] {
   return out;
 }
 
+/** Renders what the run ledger knows, as bullet points. Empty when it knows nothing. */
+export function renderHistory(view: IncidentView): string[] {
+  const history = view.history;
+  if (!history) {
+    return [];
+  }
+
+  const lines: string[] = [];
+
+  if (history.priorFix) {
+    const files = history.priorFix.likelyFixedBy;
+    const where = files.length ? ` after changes to ${files.slice(0, 3).map((f) => `\`${f}\``).join(', ')}` : '';
+    lines.push(`- **Fixed before:** this failure went away on ${history.priorFix.fixedAt}${where}.`);
+    if (history.priorFix.commitsInBetween) {
+      lines.push('  - Commits landed too, so that list is incomplete.');
+    }
+  }
+
+  if (history.lastPassedAt) {
+    const at = history.lastPassedSha ? ` at \`${history.lastPassedSha.slice(0, 8)}\`` : '';
+    lines.push(`- **Last passed:** ${history.lastPassedAt}${at}.`);
+  }
+
+  if (history.flaky) {
+    lines.push(
+      history.flaky === 'high'
+        ? '- **Unreliable:** this command has both passed and failed at the same commit with a clean tree.'
+        : '- **Possibly unreliable:** this command has both passed and failed recently, with a dirty tree.'
+    );
+  }
+
+  if (history.passRate !== undefined && history.totalRuns) {
+    lines.push(`- **Pass rate:** ${Math.round(history.passRate * 100)}% of ${history.totalRuns} recorded runs.`);
+  }
+
+  return lines;
+}
+
 /** A one-line note when a failure has been seen before. */
 export function repeatNote(count: number): string | undefined {
   if (count <= 1) {
@@ -234,6 +300,13 @@ export function buildIncidentMarkdown(view: IncidentView): string {
     push('## Root cause');
     push('');
     push(formatErrorLine(view.primaryError));
+    push('');
+  }
+
+  const historyLines = renderHistory(view);
+  if (historyLines.length) {
+    push('## What history says', '');
+    push(...historyLines);
     push('');
   }
 
@@ -348,6 +421,36 @@ export function buildRepairPrompt(view: IncidentView): string {
   if (view.primaryError) {
     push('## Most likely root cause', '');
     push(formatErrorLine(view.primaryError));
+    push('');
+  }
+
+  const priorFix = view.history?.priorFix;
+  if (priorFix) {
+    push('## You have fixed this before', '');
+    push(
+      `The same failure was resolved on ${priorFix.fixedAt}, after ${priorFix.attempts} ` +
+        `attempt${priorFix.attempts === 1 ? '' : 's'}.`
+    );
+    if (priorFix.likelyFixedBy.length) {
+      push('', 'Files being edited when it went away:');
+      for (const file of priorFix.likelyFixedBy.slice(0, 10)) {
+        push(`- \`${file}\``);
+      }
+      push('', 'Start there. It is a strong hint, not a certainty.');
+    }
+    if (priorFix.commitsInBetween) {
+      push('', 'Commits landed between the failure and the fix, so that list is incomplete.');
+    }
+    push('');
+  }
+
+  if (view.history?.flaky) {
+    push('## This command is unreliable', '');
+    push(
+      view.history.flaky === 'high'
+        ? 'It has both passed and failed at the same commit with a clean tree, so the code did not change between those runs. Consider whether this is a flaky test, a race, or an unstable environment before changing logic.'
+        : 'It has both passed and failed recently. The working tree was dirty, so an edit may explain it — but check for flakiness before assuming a code fault.'
+    );
     push('');
   }
 

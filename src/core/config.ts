@@ -20,6 +20,8 @@ export interface FaultixConfig {
   outputMode: OutputMode;
   outputDir: string;
   keepHistory: number;
+  maxRuns: number;
+  recordRuns: boolean;
 
   maxChars: number;
   maxTerminalLines: number;
@@ -72,6 +74,8 @@ export function getConfig(scope?: vscode.ConfigurationScope): FaultixConfig {
     outputMode: cfg.get<OutputMode>('output.mode', 'autoWrite'),
     outputDir: cfg.get<string>('output.dir', '.ai-repair'),
     keepHistory: clamp(cfg.get('output.keepHistory'), 0, 1000, 50),
+    maxRuns: clamp(cfg.get('history.maxRuns'), 10, 10000, 500),
+    recordRuns: cfg.get<boolean>('history.recordRuns', true),
 
     maxChars: clamp(cfg.get('output.maxChars'), 2000, 1000000, 60000),
     maxTerminalLines: clamp(cfg.get('output.maxTerminalLines'), 10, 5000, 200),

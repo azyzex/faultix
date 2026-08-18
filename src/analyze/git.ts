@@ -14,6 +14,11 @@ export interface GitEvidence {
   enabled: boolean;
   insideWorkTree: boolean;
   branch?: string;
+  /**
+   * Current commit. Recorded so the run ledger can tell a genuine fix (the
+   * commit moved) from a flaky command (it did not).
+   */
+  sha?: string;
   isDirty?: boolean;
   /** Repository-relative paths with uncommitted changes. */
   changedFiles?: string[];
@@ -41,8 +46,9 @@ export async function collectGitEvidence(args: {
     return { enabled: true, insideWorkTree: false };
   }
 
-  const [branch, status, diffStat] = await Promise.all([
+  const [branch, sha, status, diffStat] = await Promise.all([
     execGit(['rev-parse', '--abbrev-ref', 'HEAD'], cwd),
+    execGit(['rev-parse', 'HEAD'], cwd),
     execGit(['status', '--porcelain'], cwd),
     execGit(['diff', '--stat', 'HEAD'], cwd)
   ]);
@@ -51,6 +57,7 @@ export async function collectGitEvidence(args: {
     enabled: true,
     insideWorkTree: true,
     branch: branch.ok ? branch.stdout.trim() || undefined : undefined,
+    sha: sha.ok ? sha.stdout.trim() || undefined : undefined,
     isDirty: status.ok ? status.stdout.trim().length > 0 : undefined,
     changedFiles: status.ok ? parsePorcelain(status.stdout) : undefined,
     diffStat: diffStat.ok ? diffStat.stdout.trim().slice(0, MAX_DIFFSTAT_CHARS) || undefined : undefined

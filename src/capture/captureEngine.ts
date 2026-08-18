@@ -12,15 +12,36 @@
 
 import * as vscode from 'vscode';
 import { getConfig } from '../core/config';
+import { collectGitEvidence } from '../analyze/git';
+import type { GitEvidence } from '../analyze/git';
+import { shouldTrackRun } from '../analyze/runLedger';
+import type { RunLedger } from '../analyze/runLedger';
 import type { Incident } from '../core/models';
 import { buildIncident } from './buildIncident';
 
 export interface CaptureEngineDeps {
   output: vscode.LogOutputChannel;
+  /**
+   * Supplies the recorded run history, so a brief can say "you fixed this
+   * before". Read lazily: the ledger changes between captures.
+   */
+  ledger?: () => Promise<RunLedger>;
+}
+
+/** A command that finished successfully and is worth remembering. */
+export interface SuccessfulRun {
+  commandLine: string;
+  durationMs?: number;
+  git?: GitEvidence;
 }
 
 export interface CaptureEngine extends vscode.Disposable {
   readonly onIncident: vscode.Event<Incident>;
+  /**
+   * Fires for commands that *succeeded*. Recording those is what lets the
+   * ledger notice a failure going away, and tell a fix from a flaky test.
+   */
+  readonly onSuccessfulRun: vscode.Event<SuccessfulRun>;
   captureManual(): Promise<Incident | undefined>;
   /** True while automatic capture is suspended for this session. */
   readonly paused: boolean;
@@ -30,10 +51,11 @@ export interface CaptureEngine extends vscode.Disposable {
 /** Debounce for diagnostics, which fire in bursts as a language server works. */
 const DIAGNOSTICS_SETTLE_MS = 1500;
 
-export function createCaptureEngine({ output }: CaptureEngineDeps): CaptureEngine {
+export function createCaptureEngine({ output, ledger }: CaptureEngineDeps): CaptureEngine {
   const disposables: vscode.Disposable[] = [];
   const incidentEmitter = new vscode.EventEmitter<Incident>();
-  disposables.push(incidentEmitter);
+  const successEmitter = new vscode.EventEmitter<SuccessfulRun>();
+  disposables.push(incidentEmitter, successEmitter);
 
   let paused = false;
 
@@ -72,11 +94,33 @@ export function createCaptureEngine({ output }: CaptureEngineDeps): CaptureEngin
       }
 
       const config = getConfig();
+      const commandText = event.execution.commandLine.value.trim();
+      const succeeded = event.exitCode === 0;
+
+      // A successful run is cheap to record and is the other half of the
+      // ledger: without it, Faultix can say a command broke but never that it
+      // started working again.
+      if (succeeded) {
+        if (config.recordRuns && commandText && shouldTrackRun(commandText, true)) {
+          await guard(output, 'run recording', async () => {
+            successEmitter.fire({
+              commandLine: commandText,
+              durationMs: record ? Date.now() - record.startedAt : undefined,
+              git: await collectGitEvidence({
+                enabled: config.gitEnabled && vscode.workspace.isTrusted,
+                workspaceRoot: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+              })
+            });
+          });
+        }
+        return;
+      }
+
       if (!config.autoOnNonZeroExit) {
         return;
       }
-      // Exit code 0 is success; undefined means the shell never reported one.
-      if (event.exitCode === 0 || event.exitCode === undefined) {
+      // undefined means the shell never reported a status at all.
+      if (event.exitCode === undefined) {
         return;
       }
 
@@ -89,6 +133,7 @@ export function createCaptureEngine({ output }: CaptureEngineDeps): CaptureEngin
         const incident = await buildIncident({
           trigger: 'terminal',
           config,
+          ledger: await ledger?.(),
           rawOutput: record ? await record.output : '',
           commandLine,
           cwd: event.execution.cwd?.fsPath,
@@ -131,6 +176,7 @@ export function createCaptureEngine({ output }: CaptureEngineDeps): CaptureEngin
         const incident = await buildIncident({
           trigger: 'task',
           config,
+          ledger: await ledger?.(),
           taskName: event.execution.task.name,
           exitCode: event.exitCode,
           durationMs: startedAt ? Date.now() - startedAt : undefined
@@ -188,6 +234,7 @@ export function createCaptureEngine({ output }: CaptureEngineDeps): CaptureEngin
       const incident = await buildIncident({
         trigger: 'diagnostics',
         config,
+        ledger: await ledger?.(),
         kindOverride: 'typecheck',
         titleOverride: `Diagnostics spike: +${delta} errors`
       });
@@ -205,6 +252,7 @@ export function createCaptureEngine({ output }: CaptureEngineDeps): CaptureEngin
       incident = await buildIncident({
         trigger: 'manual',
         config,
+        ledger: await ledger?.(),
         titleOverride: 'Manual capture'
       });
       incidentEmitter.fire(incident);
@@ -215,6 +263,7 @@ export function createCaptureEngine({ output }: CaptureEngineDeps): CaptureEngin
 
   return {
     onIncident: incidentEmitter.event,
+    onSuccessfulRun: successEmitter.event,
     captureManual,
     get paused() {
       return paused;

@@ -10,6 +10,8 @@ import { getConfig } from './core/config';
 import { FaultixState } from './core/state';
 import type { Incident } from './core/models';
 import { createCaptureEngine } from './capture/captureEngine';
+import { RunStore } from './core/runStore';
+import { findResolution } from './analyze/runLedger';
 import { renderIncident, writeArtifacts } from './output/writer';
 import { FaultixTreeDataProvider } from './ui/treeView';
 
@@ -23,7 +25,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const tree = new FaultixTreeDataProvider(state);
   context.subscriptions.push(vscode.window.registerTreeDataProvider('faultix.incidents', tree));
 
-  const engine = createCaptureEngine({ output });
+  const runs = new RunStore({ outputDir: () => state.getOutputDirUri(), output });
+  context.subscriptions.push(runs);
+
+  const engine = createCaptureEngine({ output, ledger: () => runs.read() });
   context.subscriptions.push(engine);
 
   context.subscriptions.push(
@@ -31,6 +36,50 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       void handleIncident(incident);
     })
   );
+
+  context.subscriptions.push(
+    engine.onSuccessfulRun((run) => {
+      void handleSuccess(run);
+    })
+  );
+
+  /**
+   * A command succeeded. Record it, and check whether it just resolved a
+   * failure that was still open — the moment worth telling someone about.
+   */
+  async function handleSuccess(run: Parameters<Parameters<typeof engine.onSuccessfulRun>[0]>[0]): Promise<void> {
+    try {
+      const openSignature = state.latestIncident?.status === 'unresolved'
+        ? state.latestIncident.fingerprint.signature
+        : undefined;
+
+      const ledger = await runs.record(RunStore.successRun(run));
+
+      if (!openSignature) {
+        return;
+      }
+
+      const resolution = findResolution(ledger, openSignature);
+      if (!resolution || resolution.fixedAt !== ledger.runs[0]?.at) {
+        return;
+      }
+
+      state.markLatestResolved();
+      tree.refresh();
+
+      if (!getConfig().notifyOnCapture) {
+        return;
+      }
+
+      const files = resolution.likelyFixedBy.slice(0, 2).join(', ');
+      const detail = files ? ` (you were editing ${files})` : '';
+      void vscode.window.showInformationMessage(
+        `Faultix: that failure is fixed after ${resolution.attempts} attempt${resolution.attempts === 1 ? '' : 's'}${detail}.`
+      );
+    } catch (error) {
+      output.error(`Faultix failed to record a successful run: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 
   /** Persist, render, reveal. The one path every capture takes. */
   async function handleIncident(incident: Incident): Promise<void> {
@@ -40,6 +89,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       // Recording first stamps the repeat count, so the brief can report it.
       await state.recordIncident(incident);
       state.setLatestIncident(incident);
+
+      if (config.recordRuns) {
+        await runs.record(RunStore.failureRun(incident));
+      }
 
       const result = await writeArtifacts({ state, incident, config, output });
       if (result.archivePath) {
@@ -197,6 +250,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       return;
     }
     await state.clearHistory();
+    await runs.clear();
     state.clearLatest();
     tree.refresh();
     void vscode.window.showInformationMessage('Faultix history cleared.');
