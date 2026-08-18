@@ -1,0 +1,144 @@
+{
+  "name": "faultix",
+  "displayName": "Faultix",
+  "description": "Turns build/test/runtime failures into compact, agent-ready repair briefs (local-first).",
+  "version": "0.1.0",
+  "publisher": "your-publisher",
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "faultix.createRepairBrief",
+        "title": "Faultix: Create Repair Brief"
+      },
+      {
+        "command": "faultix.openLatestIncident",
+        "title": "Faultix: Open Latest Incident"
+      },
+      {
+        "command": "faultix.copyLatestBrief",
+        "title": "Faultix: Copy Latest Brief"
+      },
+      {
+        "command": "faultix.rerunLatestCommand",
+        "title": "Faultix: Rerun Latest Failing Command"
+      },
+      {
+        "command": "faultix.markLatestResolved",
+        "title": "Faultix: Mark Latest Incident Resolved"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "faultix",
+          "title": "Faultix",
+          "icon": "media/faultix.svg"
+        }
+      ]
+    },
+    "views": {
+      "faultix": [
+        {
+          "id": "faultix.incidents",
+          "name": "Incidents",
+          "icon": "media/faultix.svg"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Faultix",
+      "properties": {
+        "faultix.capture.autoOnNonZeroExit": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically capture a repair brief when a terminal command exits non-zero."
+        },
+        "faultix.capture.autoOnDiagnosticsSpike": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically capture a repair brief when error diagnostics increase sharply."
+        },
+        "faultix.capture.diagnosticsSpikeThreshold": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "description": "Minimum increase in error diagnostics to trigger an incident."
+        },
+        "faultix.output.mode": {
+          "type": "string",
+          "enum": ["autoWrite", "previewRequired", "clipboardOnly"],
+          "default": "autoWrite",
+          "description": "How Faultix outputs repair briefs."
+        },
+        "faultix.output.dir": {
+          "type": "string",
+          "default": ".ai-repair",
+          "description": "Workspace-relative output directory."
+        },
+        "faultix.output.maxChars": {
+          "type": "number",
+          "default": 60000,
+          "minimum": 5000,
+          "description": "Maximum total characters to write per incident across artifacts."
+        },
+        "faultix.output.maxTerminalLines": {
+          "type": "number",
+          "default": 200,
+          "minimum": 20,
+          "description": "Maximum terminal lines to keep (excerpted) for an incident."
+        },
+        "faultix.output.maxDiagnostics": {
+          "type": "number",
+          "default": 100,
+          "minimum": 10,
+          "description": "Maximum diagnostics entries to include in an incident."
+        },
+        "faultix.privacy.redactSecrets": {
+          "type": "boolean",
+          "default": true,
+          "description": "Redact common secret patterns from outputs."
+        },
+        "faultix.git.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include best-effort git branch + diff summary."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint .",
+    "package": "vsce package",
+    "pretest": "npm run compile",
+    "test:unit": "mocha --ui tdd \"out/test/suite/**/*.test.js\"",
+    "test:integration": "node ./out/test/runTest.js",
+    "test": "npm run test:unit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.88.0",
+    "@types/mocha": "^10.0.6",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@vscode/vsce": "^3.7.1",
+    "@vscode/test-electron": "^2.4.1",
+    "eslint": "^9.0.0",
+    "glob": "^10.4.5",
+    "mocha": "^10.6.0",
+    "typescript": "^5.7.0"
+  }
+}
