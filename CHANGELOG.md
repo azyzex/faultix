@@ -5,6 +5,26 @@ All notable changes to Faultix are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-08-19
+
+Found by running the extension against a real workspace rather than a fixture.
+
+### Fixed
+
+- **npm 10 output was not recognised.** npm changed its prefix from
+  `npm ERR!` to `npm error` in v10, so every line fell through to the keyword
+  fallback: a failed `npm run` produced eight near-useless "errors" and led
+  with `npm error code ENOENT` instead of the sentence that explains it,
+  `Could not read package.json: ENOENT ...`. Both spellings are now accepted,
+  npm's per-line bookkeeping markers are stripped, and a line the npm matcher
+  rejects as noise no longer falls through to be picked up again.
+- **Home directories leaked through error messages.** Anonymization covered
+  the terminal excerpt and the summary but not the parsed error list, and
+  tools print absolute paths inside their messages. A brief that scrubbed its
+  own output still showed `C:\Users\you\...` a few lines further down.
+- **Exit codes were unreadable on Windows.** A negative status arrives in its
+  unsigned 32-bit form, so npm's errno -4058 displayed as 4294963238.
+
 ## [0.2.2] - 2026-08-18
 
 ### Fixed
@@ -158,6 +178,7 @@ control-code garbage.
 Initial working version: terminal, task and diagnostics capture; suspect
 ranking; fingerprinting; markdown and prompt output; tree view.
 
+[0.2.3]: https://github.com/azyzex/faultix/releases/tag/v0.2.3
 [0.2.2]: https://github.com/azyzex/faultix/releases/tag/v0.2.2
 [0.2.1]: https://github.com/azyzex/faultix/releases/tag/v0.2.1
 [0.2.0]: https://github.com/azyzex/faultix/releases/tag/v0.2.0
