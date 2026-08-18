@@ -14,7 +14,6 @@ import * as vscode from 'vscode';
 import { getConfig } from '../core/config';
 import type { Incident } from '../core/models';
 import { buildIncident } from './buildIncident';
-import { snapshotDiagnostics } from './diagnosticsCapture';
 
 export interface CaptureEngineDeps {
   output: vscode.LogOutputChannel;
