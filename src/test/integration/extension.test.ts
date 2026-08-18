@@ -225,8 +225,31 @@ suite('integration/capture is resilient', () => {
     return (JSON.parse(raw) as { fingerprint: { count: number } }).fingerprint.count;
   }
 
+  /**
+   * Waits until the count stops moving.
+   *
+   * Earlier tests in this file fire captures without awaiting the write, so
+   * reading a baseline immediately would race work still in flight — which is
+   * exactly how this test passed locally and failed on a fresh CI runner.
+   */
+  async function waitForQuiet(stableForMs = 1200): Promise<number> {
+    let last = currentCount();
+    let lastChangedAt = Date.now();
+
+    while (Date.now() - lastChangedAt < stableForMs) {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      const now = currentCount();
+      if (now !== last) {
+        last = now;
+        lastChangedAt = Date.now();
+      }
+    }
+
+    return last;
+  }
+
   test('counts each repeat exactly once', async function () {
-    this.timeout(40000);
+    this.timeout(60000);
 
     const config = vscode.workspace.getConfiguration('faultix');
     await config.update('output.mode', undefined, vscode.ConfigurationTarget.Workspace);
@@ -238,7 +261,7 @@ suite('integration/capture is resilient', () => {
     // Measure a delta rather than an absolute value: earlier tests in this
     // file have already captured, and clearHistory needs a modal nobody can
     // answer here. "At least N" would not have caught double counting.
-    const before = currentCount();
+    const before = await waitForQuiet();
     const captures = 3;
 
     // Wait for each capture to land before starting the next: the count is
@@ -249,10 +272,12 @@ suite('integration/capture is resilient', () => {
       await waitFor(() => currentCount() >= before + i);
     }
 
+    const after = await waitForQuiet();
     assert.strictEqual(
-      currentCount(),
+      after,
       before + captures,
-      'each capture of the same failure must increment the repeat count exactly once'
+      `each capture of the same failure must increment the repeat count exactly once ` +
+        `(was ${before}, expected ${before + captures}, got ${after})`
     );
   });
 });
