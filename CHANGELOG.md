@@ -5,6 +5,40 @@ All notable changes to Faultix are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-08-18
+
+### Fixed
+
+- **Briefs could leak an absolute path.** The title was built from the raw
+  output rather than the resolved location, so it embedded whatever path the
+  tool happened to print — including the home directory the rest of the brief
+  anonymizes. Code-context headers had the same problem.
+- **Capturing with no workspace folder open produced no suspects.** Every
+  relative path failed to resolve and the evidence was silently discarded.
+  Unresolvable references are now kept in display form: they rank and are
+  named, they just cannot be opened.
+
+### Added
+
+- `faultix-brief`, a CLI that runs a command and prints the brief the
+  extension would produce, without launching an editor. `--prompt` for the
+  agent version, `--json` to see every matcher that fired, `--save` to record
+  a test fixture. Not shipped in the extension package. See
+  [docs/TESTING.md](docs/TESTING.md).
+
+### Internal
+
+- The pipeline moved into `analyze/pipeline.ts` with no `vscode` import;
+  `buildIncident` is now a thin adapter over it, and the CLI calls it directly.
+  The pipeline tests had re-implemented the stages by hand and could have
+  stayed green while the extension's assembly drifted; they now call the real
+  code.
+- Capture groups go through an accessor that distinguishes required from
+  optional, so the compiler checks a distinction the regex already encodes.
+  This made `no-unnecessary-condition` trustworthy enough to enable, which then
+  found four more places where a declared type was more confident than reality.
+- `docs/ARCHITECTURE.md` and `docs/TESTING.md`.
+
 ## [0.2.1] - 2026-08-18
 
 Two defects found by reviewing and testing the 0.2.0 build. Anyone on 0.2.0
@@ -124,6 +158,7 @@ control-code garbage.
 Initial working version: terminal, task and diagnostics capture; suspect
 ranking; fingerprinting; markdown and prompt output; tree view.
 
+[0.2.2]: https://github.com/azyzex/faultix/releases/tag/v0.2.2
 [0.2.1]: https://github.com/azyzex/faultix/releases/tag/v0.2.1
 [0.2.0]: https://github.com/azyzex/faultix/releases/tag/v0.2.0
 [0.1.0]: https://github.com/azyzex/faultix/releases/tag/v0.1.0
