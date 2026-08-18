@@ -178,7 +178,7 @@ export function inferKindFromTaskName(name: string): IncidentKind {
   if (/\b(install|restore)\b/.test(normalized)) {
     return 'packageinstall';
   }
-  if (/\b(test|spec|jest|vitest|pytest|rspec|mocha)\b/.test(normalized)) {
+  if (/\b(tests?|specs?|jest|vitest|pytest|rspec|mocha)\b/.test(normalized)) {
     return 'test';
   }
   if (/\b(lint|eslint|pylint|ruff|rubocop|clippy)\b/.test(normalized)) {
@@ -187,7 +187,7 @@ export function inferKindFromTaskName(name: string): IncidentKind {
   if (/\b(typecheck|type-check|tsc|mypy|pyright)\b/.test(normalized)) {
     return 'typecheck';
   }
-  if (/\b(build|compile|bundle|watch)\b/.test(normalized)) {
+  if (/\b(builds?|compiles?|bundles?|watch)\b/.test(normalized)) {
     return 'build';
   }
   if (/\b(run|start|serve|exec|launch|debug)\b/.test(normalized)) {

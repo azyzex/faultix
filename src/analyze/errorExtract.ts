@@ -730,5 +730,5 @@ export function summarizeFailure(text: string, fallback: string): string {
 }
 
 function truncate(s: string, max: number): string {
-  return s.length <= max ? s : `${s.slice(0, max - 1)}...`;
+  return s.length <= max ? s : `${s.slice(0, Math.max(0, max - 3))}...`;
 }

@@ -27,7 +27,8 @@ export const DEFAULT_IGNORED_SEGMENTS: readonly string[] = [
   '.svelte-kit',
   'vendor',
   'target',
-  'bin',
+  // 'bin' is deliberately absent: Rust keeps real sources in src/bin, and many
+  // repositories put hand-written scripts there. 'obj' is safe to ignore.
   'obj',
   '__pycache__',
   '.venv',

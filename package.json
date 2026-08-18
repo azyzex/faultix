@@ -78,7 +78,11 @@
         },
         "faultix.output.mode": {
           "type": "string",
-          "enum": ["autoWrite", "previewRequired", "clipboardOnly"],
+          "enum": [
+            "autoWrite",
+            "previewRequired",
+            "clipboardOnly"
+          ],
           "default": "autoWrite",
           "description": "How Faultix outputs repair briefs."
         },
@@ -129,13 +133,14 @@
     "test": "npm run test:unit"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.6",
     "@types/node": "^22.0.0",
     "@types/vscode": "^1.88.0",
-    "@types/mocha": "^10.0.6",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
-    "@vscode/vsce": "^3.7.1",
     "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.7.1",
+    "c8": "^10.1.3",
     "eslint": "^9.0.0",
     "glob": "^10.4.5",
     "mocha": "^10.6.0",
