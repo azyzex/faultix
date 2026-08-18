@@ -1,0 +1,3 @@
+node-ts/syntax_error.ts(4,10): error TS1005: ':' expected.
+node-ts/syntax_error.ts(4,13): error TS1005: ':' expected.
+node-ts/syntax_error.ts(5,1): error TS1005: '}' expected.

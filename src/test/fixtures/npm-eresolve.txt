@@ -1,0 +1,14 @@
+npm ERR! code ERESOLVE
+npm ERR! ERESOLVE unable to resolve dependency tree
+npm ERR!
+npm ERR! While resolving: demo@1.0.0
+npm ERR! Found: react@17.0.2
+npm ERR! node_modules/react
+npm ERR!   react@"^17.0.0" from the root project
+npm ERR!
+npm ERR! Could not resolve dependency:
+npm ERR! peer react@"^18.0.0" from @testing-library/react@14.0.0
+npm ERR!
+npm ERR! Fix the upstream dependency conflict, or retry
+npm ERR! this command with --force or --legacy-peer-deps
+npm ERR! A complete log of this run can be found in: /root/.npm/_logs/debug.log

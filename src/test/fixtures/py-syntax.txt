@@ -1,0 +1,4 @@
+  File "C:\Users\dev\projects\demo\python\broken_syntax.py", line 3
+    def add(a, b)
+                 ^
+SyntaxError: expected ':'

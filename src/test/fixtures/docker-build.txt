@@ -1,0 +1,13 @@
+#5 [3/5] RUN npm ci
+#5 12.34 npm ERR! code ENOENT
+#5 12.35 npm ERR! syscall open
+#5 ERROR: process "/bin/sh -c npm ci" did not complete successfully: exit code: 254
+------
+ > [3/5] RUN npm ci:
+------
+Dockerfile:8
+--------------------
+   6 |     COPY package.json ./
+   8 | >>> RUN npm ci
+--------------------
+ERROR: failed to solve: process "/bin/sh -c npm ci" did not complete successfully: exit code: 254

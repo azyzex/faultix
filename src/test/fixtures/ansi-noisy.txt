@@ -1,0 +1,9 @@
+[6n[m[K
+[K
+]633;C[3;1H]0;C:\Windows\System32\cmd.exe[?25hStarting batch error demo
+[31mDivide by zero error.[0m[K
+'this_command_does_not_exist_12345' is not recognized as an internal or external command
+,[K
+operable program or batch file.[K
+progress: 10%progress: 55%progress: 100%
+]633;D;1

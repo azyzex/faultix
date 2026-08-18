@@ -1,0 +1,4 @@
+# demo/cmd
+./main.go:9:2: undefined: fmtt
+./main.go:12:14: cannot use "5" (untyped string constant) as int value in argument to add
+./handler.go:20:6: declared and not used: result

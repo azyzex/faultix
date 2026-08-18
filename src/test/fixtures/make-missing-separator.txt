@@ -1,0 +1,3 @@
+make: Entering directory '/home/dev/demo'
+Makefile:4: *** missing separator.  Stop.
+make: Leaving directory '/home/dev/demo'

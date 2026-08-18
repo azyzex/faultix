@@ -1,0 +1,19 @@
+FAIL src/sum.test.js
+  sum
+    ✕ adds numbers (3 ms)
+
+  ● sum › adds numbers
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 5
+    Received: 6
+
+      3 | test("adds numbers", () => {
+    > 4 |   expect(sum(2, 3)).toBe(5);
+        |                     ^
+
+      at Object.<anonymous> (src/sum.test.js:4:21)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 1 total

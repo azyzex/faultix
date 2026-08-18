@@ -1,0 +1,10 @@
+node-ts/src/import_errors.ts(3,35): error TS2307: Cannot find module './does-not-exist' or its corresponding type declarations.
+node-ts/src/type_errors.ts(10,3): error TS2322: Type 'string' is not assignable to type 'number'.
+node-ts/src/type_errors.ts(11,3): error TS2322: Type 'number' is not assignable to type 'string'.
+node-ts/src/type_errors.ts(12,10): error TS2322: Type 'number' is not assignable to type 'string'.
+node-ts/src/type_errors.ts(12,13): error TS2322: Type 'number' is not assignable to type 'string'.
+node-ts/src/type_errors.ts(12,16): error TS2322: Type 'number' is not assignable to type 'string'.
+node-ts/src/type_errors.ts(19,13): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+node-ts/src/type_errors.ts(22,13): error TS18047: 'maybeUser' is possibly 'null'.
+node-ts/src/type_errors.ts(24,12): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+node-ts/src/type_errors.ts(24,38): error TS2583: Cannot find name 'Map'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.

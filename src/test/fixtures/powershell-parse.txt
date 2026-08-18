@@ -1,0 +1,6 @@
+At C:\Users\dev\projects\demo\shell\bad.ps1:6 char:24
++ Write-Host "unterminated
++                        ~
+The string is missing the terminator: ".
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : TerminatorExpectedAtEndOfString

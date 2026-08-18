@@ -1,0 +1,9 @@
+count: 0
+Traceback (most recent call last):
+  File "C:\Users\dev\projects\demo\python\runtime_error.py", line 10, in <module>
+    crash()
+    ~~~~~^^
+  File "C:\Users\dev\projects\demo\python\runtime_error.py", line 6, in crash
+    return 10 / data["count"]
+           ~~~^~~~~~~~~~~~~~~
+ZeroDivisionError: division by zero

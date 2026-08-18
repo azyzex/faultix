@@ -1,0 +1,7 @@
+
+C:\Users\dev\projects\demo\src\lint_demo_tmp.ts
+  2:9  error  'unusedValue' is assigned a value but never used                                                                                                                    @typescript-eslint/no-unused-vars
+  3:3  error  Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator  @typescript-eslint/no-floating-promises
+
+✖ 2 problems (2 errors, 0 warnings)
+

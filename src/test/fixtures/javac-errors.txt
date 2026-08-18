@@ -1,0 +1,9 @@
+src/Main.java:5: error: cannot find symbol
+        Systm.out.println("hi");
+        ^
+  symbol:   variable Systm
+  location: class Main
+src/Main.java:8: error: ';' expected
+        int x = 1
+                 ^
+2 errors

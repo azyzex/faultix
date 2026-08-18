@@ -1,0 +1,7 @@
+Determining projects to restore...
+src/Program.cs(12,30): error CS1002: ; expected [/home/dev/demo/src/Demo.csproj]
+src/Program.cs(15,13): error CS0103: The name 'Consle' does not exist in the current context [/home/dev/demo/src/Demo.csproj]
+src/Helper.cs(4,17): warning CS0219: The variable 'unused' is assigned but its value is never used [/home/dev/demo/src/Demo.csproj]
+
+Build FAILED.
+    2 Error(s)

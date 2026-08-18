@@ -1,0 +1,17 @@
+ FAIL  src/parse.test.ts > parse > handles empty input
+AssertionError: expected undefined to be '' // Object.is equality
+
+- Expected:
+""
+
++ Received:
+undefined
+
+ ❯ src/parse.test.ts:14:24
+     12| 
+     13|   it("handles empty input", () => {
+     14|     expect(parse("")).toBe("");
+       |                        ^
+
+Test Files  1 failed (1)
+     Tests  1 failed | 4 passed (5)
