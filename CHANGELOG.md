@@ -5,6 +5,39 @@ All notable changes to Faultix are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-08-18
+
+Two defects found by reviewing and testing the 0.2.0 build. Anyone on 0.2.0
+should move to this release.
+
+### Fixed
+
+- **Repeat counts advanced in steps of two.** Every capture was recorded
+  twice — once to stamp the count before rendering, then again to attach the
+  archive path — so three failures reported "seen 6 times" and history
+  collected duplicate entries. The archive path is now patched onto the
+  existing record.
+- **The declared VS Code version was wrong.** `engines.vscode` claimed
+  `^1.88.0`, but the extension is built on the terminal shell integration API
+  finalized in 1.93, so installing on 1.88 would have failed at runtime. The
+  floor is now `^1.93.0`, and `@types/vscode` is pinned with `~` to the same
+  version so the compiler enforces it rather than letting the types float
+  twenty minor versions ahead.
+
+### Internal
+
+- `verify` and `test:coverage` ran mocha without compiling first and only
+  passed locally because a previous build had left `out/` in place. Every test
+  entry point now compiles.
+- A passing Extension Host run could still fail: cleanup of the temporary
+  workspace hit `EBUSY` on Windows. Teardown now retries and never changes the
+  result.
+- The rustc, javac and gcc fixtures are now real captured output from
+  cargo 1.97, javac 17 and gcc 13.2 rather than hand-written approximations.
+- Coverage thresholds enforced in CI (90% statements, 80% branches);
+  `docs/ARCHITECTURE.md` added; launch configurations for the extension, a
+  broken workspace, and both test suites.
+
 ## [0.2.0] - 2026-08-18
 
 The first release where a brief is genuinely useful without editing. Briefs now
@@ -69,13 +102,6 @@ control-code garbage.
 - Windows-only line-ending normalization corrupted recorded test fixtures.
 - A failed capture could surface as an unhandled rejection; captures are now
   isolated and logged.
-- Every capture was recorded twice, so repeat counts advanced in steps of two
-  and history gained duplicate entries. The archive path is now patched onto
-  the existing record instead of re-recording it.
-- `engines.vscode` claimed `^1.88.0` while the extension depends on the
-  terminal shell integration API finalized in 1.93, so an install on 1.88
-  would have failed. `@types/vscode` is now pinned to the same floor so the
-  compiler enforces it.
 
 ### Security
 
@@ -98,5 +124,6 @@ control-code garbage.
 Initial working version: terminal, task and diagnostics capture; suspect
 ranking; fingerprinting; markdown and prompt output; tree view.
 
+[0.2.1]: https://github.com/azyzex/faultix/releases/tag/v0.2.1
 [0.2.0]: https://github.com/azyzex/faultix/releases/tag/v0.2.0
 [0.1.0]: https://github.com/azyzex/faultix/releases/tag/v0.1.0
