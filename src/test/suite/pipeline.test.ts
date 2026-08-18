@@ -9,77 +9,53 @@
  */
 
 import * as assert from 'assert';
-import { excerptLines, sanitizeTerminalOutput } from '../../analyze/ansi';
-import { inferKindFromCommand, inferToolHint, refineKindFromOutput } from '../../analyze/classify';
-import { dedupeErrors, extractErrors, extractFileRefs, extractPrimaryError, rankErrors, summarizeFailure } from '../../analyze/errorExtract';
-import { computeFingerprint } from '../../analyze/fingerprint';
-import { dedupeRefs, rankSuspects } from '../../analyze/scoring';
-import { anonymizeHomePaths, redactWithReport } from '../../privacy/redact';
+import { extractPrimaryError } from '../../analyze/errorExtract';
+import { analyzeFailure, DEFAULT_ANALYSIS_OPTIONS } from '../../analyze/pipeline';
+import type { DiagnosticCount } from '../../analyze/scoring';
+import { sanitizeTerminalOutput } from '../../analyze/ansi';
+import { redactWithReport } from '../../privacy/redact';
 import { buildIncidentMarkdown, buildRepairPrompt } from '../../output/templates';
-import type { ErrorView, IncidentView } from '../../output/templates';
+import type { Incident } from '../../core/models';
 import { readFixture } from './helpers';
 
-/** Mirrors `buildIncident` without the `vscode` dependency. */
-function runPipeline(fixture: string, commandLine: string, options: { diagnostics?: Array<{ file: string; errors: number; warnings: number }>; gitChangedFiles?: string[] } = {}): IncidentView {
-  const sanitized = sanitizeTerminalOutput(readFixture(fixture));
-  // Mirrors buildIncident: secrets go first, home paths only at render time,
-  // so analysis still sees resolvable absolute paths.
-  const redaction = redactWithReport(sanitized, { anonymizeHome: false });
-  const text = redaction.text;
+/**
+ * Runs the real pipeline. Before this, the harness re-implemented the stages
+ * by hand, which meant the suite could stay green while the extension's own
+ * assembly drifted away from it.
+ *
+ * File reads are disabled because fixture paths point at machines that no
+ * longer exist; snippet rendering is covered separately in templates.test.ts.
+ */
+function runPipeline(
+  fixture: string,
+  commandLine: string,
+  options: { diagnostics?: DiagnosticCount[]; gitChangedFiles?: string[] } = {}
+): Incident {
+  const diagnostics = options.diagnostics;
 
-  const kind = refineKindFromOutput(inferKindFromCommand(commandLine), text);
-  const toolHint = inferToolHint(commandLine);
-
-  const extracted = rankErrors(dedupeErrors(extractErrors(text), 20));
-  const primary = extractPrimaryError(text);
-
-  const errorRefs = dedupeRefs(extracted.filter((e) => e.file).map((e) => ({ file: e.file as string, line: e.line })));
-  const terminalRefs = dedupeRefs(extractFileRefs(text).map((r) => ({ file: r.file, line: r.line })));
-
-  const suspects = rankSuspects(
-    {
-      primaryErrorFile: primary?.file ? { file: primary.file, line: primary.line } : undefined,
-      errorRefs,
-      terminalRefs,
-      diagnostics: options.diagnostics,
-      gitChangedFiles: options.gitChangedFiles
-    },
-    { limit: 8 }
-  );
-
-  const toView = (e: (typeof extracted)[number]): ErrorView => ({
-    severity: e.severity,
-    message: e.message,
-    code: e.code,
-    file: e.file,
-    line: e.line,
-    column: e.column,
-    matcher: e.matcher
-  });
-
-  return {
-    id: 'test',
-    createdAt: '2026-01-01T00:00:00.000Z',
-    kind,
-    status: 'unresolved',
-    title: `Command failed (1): ${commandLine}`,
-    summary: anonymizeHomePaths(summarizeFailure(text, `Command failed: ${commandLine}`)),
+  return analyzeFailure({
+    trigger: 'terminal',
+    options: { ...DEFAULT_ANALYSIS_OPTIONS, allowFileReads: false },
+    rawOutput: readFixture(fixture),
+    commandLine,
+    exitCode: 1,
     workspaceName: 'demo',
-    command: { commandLine, exitCode: 1, toolHint },
-    primaryError: primary ? toView(primary) : undefined,
-    errors: extracted.map(toView),
-    terminalExcerpt: excerptLines(anonymizeHomePaths(text), 200),
-    suspects,
-    fingerprint: computeFingerprint({
-      kind,
-      commandLine,
-      toolHint,
-      primaryMessage: primary?.message,
-      primaryCode: primary?.code,
-      primaryFile: primary?.file
-    }),
-    redaction: redaction.total ? { total: redaction.total, counts: redaction.counts } : undefined
-  };
+    diagnostics: diagnostics
+      ? {
+          total: diagnostics.reduce((sum, d) => sum + d.errors + d.warnings, 0),
+          errors: diagnostics.reduce((sum, d) => sum + d.errors, 0),
+          warnings: diagnostics.reduce((sum, d) => sum + d.warnings, 0),
+          top: [],
+          byFile: diagnostics,
+          absoluteByDisplay: new Map()
+        }
+      : undefined,
+    git: options.gitChangedFiles
+      ? { enabled: true, insideWorkTree: true, changedFiles: options.gitChangedFiles }
+      : undefined,
+    // Fixed clock so ids and fingerprints are reproducible.
+    now: new Date('2026-01-01T00:00:00.000Z')
+  });
 }
 
 suite('pipeline/python runtime failure', () => {
@@ -273,4 +249,30 @@ suite('pipeline/every fixture produces a usable brief', () => {
       assert.ok(!markdown.includes('[object Object]'), 'no object leaks into the render');
     });
   }
+});
+
+suite('pipeline/no workspace folder open', () => {
+  // A window with a single file open has no workspace root, so relative paths
+  // cannot be resolved to disk. The evidence is still worth ranking; it just
+  // cannot be opened.
+  const incident = runPipeline('go-build.txt', 'go build ./...');
+
+  test('still ranks suspects', () => {
+    assert.ok((incident.suspects?.length ?? 0) > 0, 'suspects must survive an unresolvable root');
+    assert.ok(incident.suspects?.[0].file.includes('main.go'));
+  });
+
+  test('names them in display form', () => {
+    assert.ok(!incident.suspects?.[0].file.startsWith('./'), 'leading ./ is normalized away');
+  });
+
+  test('reports no absolute path, because there is none to report', () => {
+    assert.strictEqual(incident.suspects?.[0].absolutePath, undefined);
+  });
+
+  test('still renders a complete brief', () => {
+    const markdown = buildIncidentMarkdown(incident);
+    assert.ok(markdown.includes('## Root cause'));
+    assert.ok(markdown.includes('main.go'));
+  });
 });

@@ -194,11 +194,23 @@ Unrecognised toolchains still produce a brief; they fall back to generic
 
 See [SECURITY.md](SECURITY.md) for the full threat model.
 
+## Trying it without installing
+
+`faultix-brief` runs a command and prints the brief the extension would
+produce, using the same pipeline:
+
+```bash
+npm run compile
+npm run brief -- "python app.py"
+npm run brief -- --prompt "npm test"     # the agent version
+npm run brief -- --json "cargo build"    # every matcher that fired
+```
+
 ## Development
 
 ```bash
 npm install
-npm run verify           # lint, typecheck, and 416 unit tests
+npm run verify           # lint, typecheck, and 421 unit tests
 npm run test:integration # 16 tests in a real VS Code Extension Host
 npm run test:coverage   # coverage report
 npm run package         # build faultix.vsix
@@ -209,8 +221,9 @@ so it runs under plain mocha. The VS Code layer is a thin adapter over it.
 Recorded failure output lives in `src/test/fixtures` — adding a toolchain means
 adding a fixture and an expectation, not writing a mock.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pipeline fits together.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow,
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pipeline fits
+together, and [docs/TESTING.md](docs/TESTING.md) for how to exercise it.
 
 ## License
 

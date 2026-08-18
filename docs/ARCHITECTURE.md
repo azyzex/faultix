@@ -19,7 +19,7 @@ src/ui/        adapter the side panel
 Everything above the line runs under plain mocha in about 300ms. Everything
 below it needs an Extension Host and takes about 8 seconds. That ratio is why
 the split is worth enforcing: it is what makes it cheap enough to test the
-interesting logic thoroughly, and it is why 416 of the 432 tests never launch
+interesting logic thoroughly, and it is why 421 of the 437 tests never launch
 an editor.
 
 The practical consequence is that logic should keep moving *up*. When a piece
@@ -28,7 +28,10 @@ module with the adapter passing it plain data.
 
 ## The pipeline
 
-`capture/buildIncident.ts` is the only place observations become an incident.
+`analyze/pipeline.ts` is the only place observations become an incident, and
+it has no `vscode` import. `capture/buildIncident.ts` is a thin adapter that
+gathers editor state and calls it; the `faultix-brief` CLI calls it directly.
+Both paths therefore run the same code.
 Everything upstream gathers raw material; everything downstream renders or
 persists what it produced. The ordering is not arbitrary — each step below
 depends on the one before it, and two of the orderings are load-bearing.
@@ -140,7 +143,7 @@ with a fixed argument array, a 1.5 second timeout and a 1 MB output cap.
 
 | Suite | Count | Runtime | What it proves |
 |---|---|---|---|
-| Unit | 416 | ~0.3s | Every pure module, fixture-driven |
+| Unit | 421 | ~0.3s | Every pure module, fixture-driven |
 | Pipeline | included above | | A brief renders for all 23 recorded failures |
 | Extension Host | 16 | ~8s | Activation, commands, settings, real file writes |
 

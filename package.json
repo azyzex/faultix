@@ -359,7 +359,8 @@
     "package": "vsce package --out faultix.vsix",
     "publish": "vsce publish",
     "pretest:unit": "npm run compile",
-    "pretest:integration": "npm run compile"
+    "pretest:integration": "npm run compile",
+    "brief": "node out/tools/brief.js"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.6",

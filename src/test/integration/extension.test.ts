@@ -241,9 +241,12 @@ suite('integration/capture is resilient', () => {
     const before = currentCount();
     const captures = 3;
 
-    for (let i = 0; i < captures; i++) {
+    // Wait for each capture to land before starting the next: the count is
+    // read from a file the extension writes asynchronously, so firing all
+    // three and checking at the end races the writer.
+    for (let i = 1; i <= captures; i++) {
       await vscode.commands.executeCommand('faultix.createRepairBrief');
-      await waitFor(() => currentCount() > before + i - 1);
+      await waitFor(() => currentCount() >= before + i);
     }
 
     assert.strictEqual(

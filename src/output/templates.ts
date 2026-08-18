@@ -418,6 +418,20 @@ export function buildRepairPrompt(view: IncidentView): string {
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
 }
 
+/**
+ * One-line summary of an error, for a title or the status bar.
+ *
+ * Takes an ErrorView rather than raw text so the location is the resolved
+ * display path; summarizing from the raw output would embed the absolute path
+ * the tool happened to print.
+ */
+export function summarizeError(error: ErrorView, max = 200): string {
+  const location = error.file ? ` (${error.file}${error.line !== undefined ? `:${error.line}` : ''})` : '';
+  const code = error.code && !error.message.startsWith(error.code) ? `${error.code}: ` : '';
+  const summary = `${code}${oneLine(error.message)}${location}`;
+  return summary.length <= max ? summary : `${summary.slice(0, Math.max(0, max - 3))}...`;
+}
+
 /** Renders one error as a single markdown line. */
 export function formatErrorLine(error: ErrorView): string {
   const parts: string[] = [];
