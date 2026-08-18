@@ -88,11 +88,49 @@ const REF_EXTENSIONS = new Set([
   'gradle', 'tf', 'tfvars', 'csproj', 'vbproj', 'sln', 'lock', 'txt', 'cfg'
 ]);
 
+/**
+ * Capture-group accessor.
+ *
+ * `RegExpMatchArray` is indexed as `string`, but a group that did not
+ * participate yields `undefined` — so `m[3].trim()` on an optional group is a
+ * crash the type system cannot see. Going through this interface forces every
+ * access to declare which kind of group it is, which puts the distinction the
+ * pattern already encodes in front of the compiler.
+ */
+export interface Captures {
+  /** A group the pattern guarantees participated. */
+  req(index: number): string;
+  /** A group that may not have participated. */
+  opt(index: number): string | undefined;
+}
+
+class MissingCaptureError extends Error {
+  public constructor(matcher: string, index: number) {
+    super(`matcher "${matcher}": capture group ${index} was read as required but did not participate`);
+    this.name = 'MissingCaptureError';
+  }
+}
+
+function captures(match: RegExpMatchArray, matcherName: string): Captures {
+  return {
+    req(index: number): string {
+      const value = match[index] as string | undefined;
+      if (value === undefined) {
+        // A required group that did not participate means the accessor and
+        // the pattern disagree: a bug in this file, not in the input.
+        throw new MissingCaptureError(matcherName, index);
+      }
+      return value;
+    },
+    opt: (index: number): string | undefined => match[index] as string | undefined
+  };
+}
+
 interface Matcher {
   name: string;
   pattern: RegExp;
   confidence: number;
-  build: (m: RegExpMatchArray) => Omit<ExtractedError, 'matcher' | 'index' | 'confidence' | 'raw'> | undefined;
+  build: (c: Captures) => Omit<ExtractedError, 'matcher' | 'index' | 'confidence' | 'raw'> | undefined;
 }
 
 const severityOf = (word: string | undefined): ExtractedSeverity =>
@@ -124,13 +162,13 @@ const MATCHERS: Matcher[] = [
     name: 'compiler-paren',
     pattern: /^(.+?)\((\d+)(?:,(\d+))?\):\s*(error|warning)\s+([A-Za-z]+\d+):\s*(.+)$/,
     confidence: CONF.codedWithLocation,
-    build: (m) => ({
-      severity: severityOf(m[4]),
-      code: m[5],
-      message: stripProjectSuffix(m[6]),
-      file: m[1].trim(),
-      line: num(m[2]),
-      column: num(m[3])
+    build: (c) => ({
+      severity: severityOf(c.req(4)),
+      code: c.req(5),
+      message: stripProjectSuffix(c.req(6)),
+      file: c.req(1).trim(),
+      line: num(c.req(2)),
+      column: num(c.opt(3))
     })
   },
   {
@@ -138,13 +176,13 @@ const MATCHERS: Matcher[] = [
     name: 'compiler-dash',
     pattern: /^(.+?):(\d+):(\d+)\s+-\s+(error|warning)\s+([A-Za-z]+\d+):\s*(.+)$/,
     confidence: CONF.codedWithLocation,
-    build: (m) => ({
-      severity: severityOf(m[4]),
-      code: m[5],
-      message: stripProjectSuffix(m[6]),
-      file: m[1].trim(),
-      line: num(m[2]),
-      column: num(m[3])
+    build: (c) => ({
+      severity: severityOf(c.req(4)),
+      code: c.req(5),
+      message: stripProjectSuffix(c.req(6)),
+      file: c.req(1).trim(),
+      line: num(c.req(2)),
+      column: num(c.req(3))
     })
   },
   {
@@ -152,12 +190,12 @@ const MATCHERS: Matcher[] = [
     name: 'gnu-location',
     pattern: /^(.+?):(\d+):(\d+):\s*(fatal error|error|warning):\s*(.+)$/,
     confidence: CONF.codedWithLocation,
-    build: (m) => ({
-      severity: severityOf(m[4]),
-      message: m[5].trim(),
-      file: m[1].trim(),
-      line: num(m[2]),
-      column: num(m[3])
+    build: (c) => ({
+      severity: severityOf(c.req(4)),
+      message: c.req(5).trim(),
+      file: c.req(1).trim(),
+      line: num(c.req(2)),
+      column: num(c.req(3))
     })
   },
   {
@@ -165,11 +203,11 @@ const MATCHERS: Matcher[] = [
     name: 'javac',
     pattern: /^(.+?\.(?:java|kt|scala)):(\d+):\s*(error|warning):\s*(.+)$/,
     confidence: CONF.codedWithLocation,
-    build: (m) => ({
-      severity: severityOf(m[3]),
-      message: m[4].trim(),
-      file: m[1].trim(),
-      line: num(m[2])
+    build: (c) => ({
+      severity: severityOf(c.req(3)),
+      message: c.req(4).trim(),
+      file: c.req(1).trim(),
+      line: num(c.req(2))
     })
   },
   {
@@ -177,11 +215,11 @@ const MATCHERS: Matcher[] = [
     name: 'php',
     pattern: /^PHP\s+(?:Parse|Fatal|Warning)\s*error:\s*(.+?)\s+in\s+(.+?)\s+on line\s+(\d+)/i,
     confidence: CONF.codedWithLocation,
-    build: (m) => ({
+    build: (c) => ({
       severity: 'error',
-      message: m[1].trim(),
-      file: m[2].trim(),
-      line: num(m[3])
+      message: c.req(1).trim(),
+      file: c.req(2).trim(),
+      line: num(c.req(3))
     })
   },
   {
@@ -189,11 +227,11 @@ const MATCHERS: Matcher[] = [
     name: 'make',
     pattern: /^(.*[Mm]akefile[\w.]*):(\d+):\s*\*\*\*\s*(.+?)\.?\s*(?:Stop\.)?$/,
     confidence: CONF.codedWithLocation,
-    build: (m) => ({
+    build: (c) => ({
       severity: 'error',
-      message: m[3].trim(),
-      file: m[1].trim(),
-      line: num(m[2])
+      message: c.req(3).trim(),
+      file: c.req(1).trim(),
+      line: num(c.req(2))
     })
   },
   {
@@ -201,17 +239,17 @@ const MATCHERS: Matcher[] = [
     name: 'rustc-summary',
     pattern: /^(?:error|warning):\s*(aborting due to .*|could not compile .*|build failed.*)$/i,
     confidence: CONF.keyword,
-    build: (m) => ({ severity: 'error', message: m[1].trim() })
+    build: (c) => ({ severity: 'error', message: c.req(1).trim() })
   },
   {
     // rustc: error[E0308]: mismatched types
     name: 'rustc-header',
     pattern: /^(error|warning)(?:\[([A-Z]\d+)\])?:\s*(.+)$/,
     confidence: CONF.exception,
-    build: (m) => ({
-      severity: severityOf(m[1]),
-      code: m[2],
-      message: m[3].trim()
+    build: (c) => ({
+      severity: severityOf(c.req(1)),
+      code: c.opt(2),
+      message: c.req(3).trim()
     })
   },
   {
@@ -219,12 +257,12 @@ const MATCHERS: Matcher[] = [
     name: 'go-location',
     pattern: /^(\.{0,2}[\w./\\-]*\.go):(\d+)(?::(\d+))?:\s*(.+)$/,
     confidence: CONF.location,
-    build: (m) => ({
+    build: (c) => ({
       severity: 'error',
-      message: m[4].trim(),
-      file: m[1].trim(),
-      line: num(m[2]),
-      column: num(m[3])
+      message: c.req(4).trim(),
+      file: c.req(1).trim(),
+      line: num(c.req(2)),
+      column: num(c.opt(3))
     })
   },
   {
@@ -232,16 +270,16 @@ const MATCHERS: Matcher[] = [
     name: 'shell-location',
     pattern: /^(?:(.+?):\s*)?line\s+(\d+):\s*(.+)$/,
     confidence: CONF.location,
-    build: (m) => {
-      const message = m[3].trim();
+    build: (c) => {
+      const message = c.req(3).trim();
       if (message.length < 3) {
         return undefined;
       }
       return {
         severity: 'error',
         message,
-        file: m[1]?.trim(),
-        line: num(m[2])
+        file: c.opt(1)?.trim(),
+        line: num(c.req(2))
       };
     }
   },
@@ -251,9 +289,9 @@ const MATCHERS: Matcher[] = [
     name: 'exception',
     pattern: /^((?:[A-Z][A-Za-z0-9_.]*)??(?:Error|Exception|Fault|Panic|Failure))(?::\s*(.*))?$/,
     confidence: CONF.exception,
-    build: (m) => {
-      const type = m[1];
-      const detail = (m[2] ?? '').trim();
+    build: (c) => {
+      const type = c.req(1);
+      const detail = (c.opt(2) ?? '').trim();
       return {
         severity: 'error',
         code: type,
@@ -266,8 +304,10 @@ const MATCHERS: Matcher[] = [
     name: 'pytest-e',
     pattern: /^E\s{2,}([A-Za-z_.]*(?:Error|Exception|Failed)?):?\s*(.*)$/,
     confidence: CONF.exception,
-    build: (m) => {
-      const message = `${m[1]}${m[2] ? `: ${m[2]}` : ''}`.trim();
+    build: (c) => {
+      const type = c.req(1);
+      const detail = c.req(2);
+      const message = `${type}${detail ? `: ${detail}` : ''}`.trim();
       return message.length > 2 ? { severity: 'error', message } : undefined;
     }
   },
@@ -276,10 +316,10 @@ const MATCHERS: Matcher[] = [
     name: 'cmd-not-found',
     pattern: /^'?([^'\r\n]+?)'?\s+is not recognized as an internal or external command/,
     confidence: CONF.exception,
-    build: (m) => ({
+    build: (c) => ({
       severity: 'error',
       code: 'CommandNotFound',
-      message: `Command not found: ${m[1].trim()}`
+      message: `Command not found: ${c.req(1).trim()}`
     })
   },
   {
@@ -287,10 +327,10 @@ const MATCHERS: Matcher[] = [
     name: 'sh-not-found',
     pattern: /^(?:.*:\s*)?([\w.\-/]+):\s*(?:command not found|not found)$/,
     confidence: CONF.exception,
-    build: (m) => ({
+    build: (c) => ({
       severity: 'error',
       code: 'CommandNotFound',
-      message: `Command not found: ${m[1].trim()}`
+      message: `Command not found: ${c.req(1).trim()}`
     })
   },
   {
@@ -298,19 +338,23 @@ const MATCHERS: Matcher[] = [
     name: 'jest-fail',
     pattern: /^\s*FAIL\s+(\S+)(?:\s+[>›]\s+(.*))?$/,
     confidence: CONF.runnerFailure,
-    build: (m) => ({
-      severity: 'error',
-      message: m[2]?.trim() ? `Test failed: ${m[2].trim()}` : `Test suite failed: ${m[1]}`,
-      file: m[1]
-    })
+    build: (c) => {
+      const suite = c.req(1);
+      const name = c.opt(2)?.trim();
+      return {
+        severity: 'error',
+        message: name ? `Test failed: ${name}` : `Test suite failed: ${suite}`,
+        file: suite
+      };
+    }
   },
   {
     // Individual failing test marker, where the capture is a test name not a path.
     name: 'test-marker',
     pattern: /^\s*(?:[\u2715\u00d7\u2717\u2718]|\u25cf)\s+(.+?)(?:\s+\(\d+\s*ms\))?$/,
     confidence: CONF.runnerFailure,
-    build: (m) => {
-      const name = m[1].trim();
+    build: (c) => {
+      const name = c.req(1).trim();
       return name.length > 1 ? { severity: 'error', message: `Failing test: ${name}` } : undefined;
     }
   },
@@ -319,8 +363,8 @@ const MATCHERS: Matcher[] = [
     name: 'assertion',
     pattern: /^\s*(expect\(.+?\)\..+|AssertionError.*|Expected:\s*.+|Received:\s*.+)$/,
     confidence: CONF.assertion,
-    build: (m) => {
-      const message = m[1].trim();
+    build: (c) => {
+      const message = c.req(1).trim();
       if (/^(Expected|Received):/.test(message) && message.length < 12) {
         return undefined;
       }
@@ -332,23 +376,28 @@ const MATCHERS: Matcher[] = [
     name: 'pytest-failed',
     pattern: /^FAILED\s+([^\s:]+)(?:::(\S+))?\s*(?:-\s*(.*))?$/,
     confidence: CONF.runnerFailure,
-    build: (m) => ({
-      severity: 'error',
-      message: m[3]?.trim() || `Test failed: ${m[2] ?? m[1]}`,
-      file: m[1]
-    })
+    build: (c) => {
+      const file = c.req(1);
+      const test = c.opt(2);
+      const detail = c.opt(3)?.trim();
+      return {
+        severity: 'error',
+        message: detail || `Test failed: ${test ?? file}`,
+        file
+      };
+    }
   },
   {
     // eslint result line: "  12:5  error  'x' is never used  no-unused-vars"
     name: 'eslint',
     pattern: /^\s+(\d+):(\d+)\s+(error|warning)\s+(.+?)(?:\s{2,}([\w@][\w@/-]*))?\s*$/,
     confidence: CONF.location,
-    build: (m) => ({
-      severity: severityOf(m[3]),
-      code: m[5],
-      message: m[4].trim(),
-      line: num(m[1]),
-      column: num(m[2])
+    build: (c) => ({
+      severity: severityOf(c.req(3)),
+      code: c.opt(5),
+      message: c.req(4).trim(),
+      line: num(c.req(1)),
+      column: num(c.req(2))
     })
   },
   {
@@ -356,12 +405,12 @@ const MATCHERS: Matcher[] = [
     name: 'ps-location',
     pattern: /^At\s+(.+?):(\d+)\s+char:(\d+)\s*$/,
     confidence: CONF.location,
-    build: (m) => ({
+    build: (c) => ({
       severity: 'error',
       message: 'PowerShell parse error',
-      file: m[1].trim(),
-      line: num(m[2]),
-      column: num(m[3])
+      file: c.req(1).trim(),
+      line: num(c.req(2)),
+      column: num(c.req(3))
     })
   },
   {
@@ -369,15 +418,18 @@ const MATCHERS: Matcher[] = [
     name: 'powershell',
     pattern: /^\s*\+?\s*(?:CategoryInfo\s*:\s*)?(ParserError|CommandNotFoundException|RuntimeException|ParentContainsErrorRecordException)\b\s*:?\s*(.*)$/,
     confidence: CONF.toolPrefixed,
-    build: (m) => ({ severity: 'error', code: m[1], message: `PowerShell ${m[1]}` })
+    build: (c) => {
+      const kind = c.req(1);
+      return { severity: 'error', code: kind, message: `PowerShell ${kind}` };
+    }
   },
   {
     // npm: npm ERR! code ERESOLVE
     name: 'npm',
     pattern: /^npm ERR!\s+(.+)$/,
     confidence: CONF.toolPrefixed,
-    build: (m) => {
-      const message = m[1].trim();
+    build: (c) => {
+      const message = c.req(1).trim();
       if (/^(A complete log|code |errno |path |command |gyp |peer |node_modules)/i.test(message)) {
         return undefined;
       }
@@ -389,19 +441,19 @@ const MATCHERS: Matcher[] = [
     name: 'docker',
     pattern: /^(?:#\d+\s+)?ERROR:\s*(failed to solve.*|.*did not complete successfully.*)$/,
     confidence: CONF.toolPrefixed,
-    build: (m) => ({ severity: 'error', message: m[1].trim() })
+    build: (c) => ({ severity: 'error', message: c.req(1).trim() })
   },
   {
     // Generic "path:line: something went wrong" used by ruby, lua and sql tools.
     name: 'generic-location',
     pattern: /^(.+?\.[A-Za-z0-9]{1,8}):(\d+):\s*(.+)$/,
     confidence: CONF.location,
-    build: (m) => {
-      const message = m[3].trim();
+    build: (c) => {
+      const message = c.req(3).trim();
       if (!/error|expected|unexpected|invalid|cannot|failed|undefined|missing/i.test(message)) {
         return undefined;
       }
-      return { severity: 'error', message, file: m[1].trim(), line: num(m[2]) };
+      return { severity: 'error', message, file: c.req(1).trim(), line: num(c.req(2)) };
     }
   },
   {
@@ -410,8 +462,8 @@ const MATCHERS: Matcher[] = [
     pattern:
       /^(.*\b(?:fatal|error|exception|panic|failed|failure|cannot|unable to|no such file|permission denied|unterminated|missing the terminator|unexpected token)\b.*)$/i,
     confidence: CONF.keyword,
-    build: (m) => {
-      const message = m[1].trim();
+    build: (c) => {
+      const message = c.req(1).trim();
       if (/\b0 (errors?|problems?|failures?)\b/i.test(message)) {
         return undefined;
       }
@@ -502,7 +554,20 @@ export function extractErrors(text: string): ExtractedError[] {
         continue;
       }
 
-      const built = matcher.build(match);
+      let built: ReturnType<Matcher['build']>;
+      try {
+        built = matcher.build(captures(match, matcher.name));
+      } catch (error) {
+        // A matcher whose accessor disagrees with its pattern is a bug here,
+        // but extraction is best effort: skip the matcher rather than losing
+        // every remaining error in the output. Tests surface it immediately,
+        // because the fixture expectations assert on extracted content.
+        if (!(error instanceof MissingCaptureError)) {
+          throw error;
+        }
+        continue;
+      }
+
       if (!built || !built.message) {
         continue;
       }

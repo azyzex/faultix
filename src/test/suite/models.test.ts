@@ -40,7 +40,11 @@ suite('models/coerceHistory', () => {
     };
     const history = coerceHistory(input);
     assert.strictEqual(history.incidents.length, 1);
-    assert.strictEqual(history.fingerprints.s.count, 1);
+    assert.strictEqual(history.fingerprints.s?.count, 1);
+  });
+
+  test('a signature that was never seen looks up as undefined', () => {
+    assert.strictEqual(coerceHistory({}).fingerprints['never-seen'], undefined);
   });
 
   // A ledger on disk can be truncated by a crash or edited by hand. None of

@@ -41,6 +41,19 @@ export interface FaultixConfig {
   notifyOnCapture: boolean;
 }
 
+/**
+ * Coerces a setting to a list of strings.
+ *
+ * A user can put anything in settings.json, including a bare string where an
+ * array belongs. Defaulting with `?? []` would not catch that; validating does.
+ */
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
+}
+
 /** Clamps a number into range, falling back when the value is not usable. */
 function clamp(value: unknown, min: number, max: number, fallback: number): number {
   const n = typeof value === 'number' && Number.isFinite(value) ? value : fallback;
@@ -73,7 +86,7 @@ export function getConfig(scope?: vscode.ConfigurationScope): FaultixConfig {
     anonymizePaths: cfg.get<boolean>('privacy.anonymizeHomePaths', true),
 
     gitEnabled: cfg.get<boolean>('git.enabled', true),
-    ignoredSegments: cfg.get<string[]>('analysis.ignoredFolders', []) ?? [],
+    ignoredSegments: toStringArray(cfg.get('analysis.ignoredFolders')),
 
     openOnCapture: cfg.get<boolean>('ui.openOnCapture', false),
     showStatusBar: cfg.get<boolean>('ui.showStatusBar', true),

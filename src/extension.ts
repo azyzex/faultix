@@ -153,7 +153,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   });
 
   command('faultix.rerunLatestCommand', async () => {
-    const commandLine = state.latestIncident?.command?.commandLine?.trim();
+    const commandLine = state.latestIncident?.command?.commandLine.trim();
     if (!commandLine) {
       void vscode.window.showWarningMessage('The latest incident has no command to re-run.');
       return;

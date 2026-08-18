@@ -46,7 +46,12 @@ export interface IncidentSummary {
 export interface HistoryFile {
   version: 1;
   incidents: IncidentSummary[];
-  fingerprints: Record<string, FingerprintStats>;
+  /**
+   * Keyed by signature. The value is optional because this is deserialized
+   * from a file on disk: a lookup for a signature never seen before misses,
+   * and typing it as always-present hides that from the compiler.
+   */
+  fingerprints: Record<string, FingerprintStats | undefined>;
 }
 
 export interface FingerprintStats {

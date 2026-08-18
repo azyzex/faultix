@@ -80,12 +80,12 @@ export function createCaptureEngine({ output }: CaptureEngineDeps): CaptureEngin
         return;
       }
 
-      const commandLine = event.execution.commandLine?.value?.trim();
-      if (!commandLine) {
-        return;
-      }
-
       await guard(output, 'terminal capture', async () => {
+        const commandLine = event.execution.commandLine.value.trim();
+        if (!commandLine) {
+          return;
+        }
+
         const incident = await buildIncident({
           trigger: 'terminal',
           config,

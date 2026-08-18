@@ -230,7 +230,10 @@ function extractCommandRefs(commandLine: string): FileRef[] {
 
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(commandLine)) !== null) {
-    const token = match[1] ?? match[2] ?? match[3];
+    // Three alternatives, exactly one of which participates. RegExpExecArray
+    // types every group as `string`, which would hide that from the compiler.
+    const [, doubleQuoted, singleQuoted, bare] = match as unknown as Array<string | undefined>;
+    const token = doubleQuoted ?? singleQuoted ?? bare;
     if (!token || token.startsWith('-')) {
       continue;
     }
