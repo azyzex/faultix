@@ -6,3 +6,4 @@
 *.png binary
 *.vsix binary
 package-lock.json linguist-generated=true
+src/test/fixtures/** -text
