@@ -108,6 +108,18 @@
         "title": "Pause or Resume Automatic Capture",
         "category": "Faultix",
         "icon": "$(debug-pause)"
+      },
+      {
+        "command": "faultix.copyMcpConfig",
+        "title": "Copy MCP Server Config",
+        "category": "Faultix",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "faultix.showFlakyCommands",
+        "title": "Show Flaky Commands",
+        "category": "Faultix",
+        "icon": "$(pulse)"
       }
     ],
     "menus": {
@@ -141,6 +153,16 @@
           "command": "faultix.clearHistory",
           "when": "view == faultix.incidents",
           "group": "9_danger@1"
+        },
+        {
+          "command": "faultix.showFlakyCommands",
+          "when": "view == faultix.incidents",
+          "group": "1_state@3"
+        },
+        {
+          "command": "faultix.copyMcpConfig",
+          "when": "view == faultix.incidents",
+          "group": "1_state@4"
         }
       ],
       "view/item/context": [
@@ -374,7 +396,8 @@
     "publish": "vsce publish",
     "pretest:unit": "npm run compile",
     "pretest:integration": "npm run compile",
-    "brief": "node out/tools/brief.js"
+    "brief": "node out/tools/brief.js",
+    "mcp": "node out/mcp/server.js"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.6",
@@ -393,5 +416,9 @@
   "overrides": {
     "serialize-javascript": "^7.1.0",
     "diff": "^8.0.2"
+  },
+  "bin": {
+    "faultix-mcp": "./out/mcp/server.js",
+    "faultix-brief": "./out/tools/brief.js"
   }
 }

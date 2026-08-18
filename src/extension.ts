@@ -11,7 +11,7 @@ import { FaultixState } from './core/state';
 import type { Incident } from './core/models';
 import { createCaptureEngine } from './capture/captureEngine';
 import { RunStore } from './core/runStore';
-import { findResolution } from './analyze/runLedger';
+import { detectFlakyCommands, findResolution } from './analyze/runLedger';
 import { renderIncident, writeArtifacts } from './output/writer';
 import { FaultixTreeDataProvider } from './ui/treeView';
 
@@ -254,6 +254,99 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     state.clearLatest();
     tree.refresh();
     void vscode.window.showInformationMessage('Faultix history cleared.');
+  });
+
+  command('faultix.copyMcpConfig', async () => {
+    // Points at the installed copy of the server, so the config works as
+    // pasted rather than needing a path filled in.
+    const serverPath = vscode.Uri.joinPath(context.extensionUri, 'out', 'mcp', 'server.js').fsPath;
+    const root = state.getWorkspaceRoot();
+
+    const config = {
+      mcpServers: {
+        faultix: {
+          command: 'node',
+          args: root ? [serverPath, root] : [serverPath]
+        }
+      }
+    };
+
+    const json = JSON.stringify(config, null, 2);
+    await vscode.env.clipboard.writeText(json);
+
+    const choice = await vscode.window.showInformationMessage(
+      "Faultix: MCP server config copied. Add it to your agent so it can read this workspace's failure history.",
+      'Show me'
+    );
+
+    if (choice === 'Show me') {
+      const document = await vscode.workspace.openTextDocument({
+        language: 'markdown',
+        content: [
+          '# Connect Faultix to your agent',
+          '',
+          "Faultix can expose this workspace's failure history over the Model Context",
+          'Protocol, so an agent can ask what broke, whether it has broken before, and',
+          'what fixed it last time.',
+          '',
+          '## Claude Code',
+          '',
+          '```bash',
+          `claude mcp add faultix -- node "${serverPath}"${root ? ` "${root}"` : ''}`,
+          '```',
+          '',
+          '## Anything that reads a config file (Cursor, Windsurf, Claude Desktop)',
+          '',
+          'This is already on your clipboard:',
+          '',
+          '```json',
+          json,
+          '```',
+          '',
+          '## What it exposes',
+          '',
+          '- `faultix_latest_failure` - the most recent failure as a repair brief',
+          '- `faultix_search_failures` - has this happened before?',
+          '- `faultix_failure_history` - was it ever fixed, and by changing what?',
+          '- `faultix_flaky_commands` - which commands disagree with themselves',
+          '- `faultix_command_stats` - pass rates and when each last worked',
+          '- `faultix_recent_failures` - what has been going wrong lately',
+          '',
+          'The server is read-only. It opens the files Faultix wrote and runs nothing.',
+          ''
+        ].join('\n')
+      });
+      await vscode.window.showTextDocument(document, { preview: false });
+    }
+  });
+
+  command('faultix.showFlakyCommands', async () => {
+    const flaky = detectFlakyCommands(await runs.read());
+
+    if (!flaky.length) {
+      void vscode.window.showInformationMessage(
+        'Faultix: no command has been recorded both passing and failing, so nothing looks flaky.'
+      );
+      return;
+    }
+
+    const lines = ['# Commands that disagreed with themselves', ''];
+    for (const entry of flaky) {
+      lines.push(`## \`${entry.commandLine}\``, '');
+      lines.push(`- ${entry.passes} passed, ${entry.failures} failed.`);
+      lines.push(
+        entry.confidence === 'high'
+          ? `- Both outcomes at commit \`${(entry.conflictingSha ?? '').slice(0, 8)}\` with a clean working tree, so the code did not change between those runs.`
+          : '- Disagreed at one commit, but the working tree was dirty, so an edit may explain it.'
+      );
+      lines.push('');
+    }
+
+    const document = await vscode.workspace.openTextDocument({
+      language: 'markdown',
+      content: lines.join('\n')
+    });
+    await vscode.window.showTextDocument(document, { preview: false });
   });
 
   command('faultix.togglePause', () => {

@@ -1,4 +1,8 @@
 # Source and build tooling: only out/ ships.
+#
+# out/mcp and out/tools are deliberately included: the MCP server and the
+# faultix-brief CLI are user-facing features, and the "Copy MCP Server Config"
+# command points at the installed copy of the server.
 src/**
 out/**/*.map
 out/test/**
@@ -23,4 +27,3 @@ docs/**
 *.vsix
 coverage/**
 .ai-repair/**
-out/tools/**

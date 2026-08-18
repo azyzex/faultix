@@ -21,7 +21,11 @@
  */
 
 import { inferKindFromCommand } from './classify';
+import type { IncidentView } from '../output/templates';
 import { normalizeCommand } from './fingerprint';
+
+/** What a brief reports about a failure's past. Defined by the renderer. */
+export type IncidentHistory = NonNullable<IncidentView['history']>;
 
 export interface RunRecord {
   /** ISO timestamp of when the run finished. */
@@ -387,4 +391,49 @@ export function shouldTrackRun(commandLine: string, ok: boolean): boolean {
     return true;
   }
   return inferKindFromCommand(commandLine) !== 'unknown';
+}
+
+/** Summarizes what the ledger knows about this failure and this command. */
+export function deriveHistory(
+  ledger: RunLedger,
+  commandLine: string,
+  signature: string
+): IncidentHistory | undefined {
+  const key = commandKeyOf(commandLine);
+
+  const resolution = findResolution(ledger, signature);
+  const lastPass = lastPassingRun(ledger, key);
+  const stats = statsForCommand(ledger, key);
+  const flaky = detectFlakyCommands(ledger).find((candidate) => candidate.commandKey === key);
+
+  const history: IncidentHistory = {
+    priorFix: resolution
+      ? {
+          fixedAt: resolution.fixedAt,
+          likelyFixedBy: resolution.likelyFixedBy,
+          attempts: resolution.attempts,
+          commitsInBetween: resolution.commitsInBetween
+        }
+      : undefined,
+    lastPassedAt: lastPass?.at,
+    lastPassedSha: lastPass?.gitSha,
+    passRate: stats?.passRate,
+    totalRuns: stats?.runs,
+    // A low-confidence disagreement means the command passed and failed at one
+    // commit with a dirty tree — which is exactly what a fix looks like. When
+    // one was recorded, saying "this is flaky" as well would contradict it.
+    // A clean-tree disagreement is different: the code genuinely did not change.
+    flaky: flaky && (flaky.confidence === 'high' || !resolution) ? flaky.confidence : undefined
+  };
+
+  // Nothing worth saying is still nothing; keep the section off the brief
+  // entirely. Listed field by field rather than via Object.values, which
+  // erases optionality and would make the check look impossible.
+  const hasAnything =
+    history.priorFix !== undefined ||
+    history.lastPassedAt !== undefined ||
+    history.passRate !== undefined ||
+    history.flaky !== undefined;
+
+  return hasAnything ? history : undefined;
 }

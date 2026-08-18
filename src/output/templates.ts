@@ -494,18 +494,23 @@ export function buildRepairPrompt(view: IncidentView): string {
     push('');
   }
 
-  push('## Context', '');
+  // Only emit the heading when there is something to put under it.
+  const contextLines: string[] = [];
   if (view.workspaceName) {
-    push(`- Workspace: ${view.workspaceName}`);
+    contextLines.push(`- Workspace: ${view.workspaceName}`);
   }
   if (view.git?.branch) {
-    push(`- Branch: ${view.git.branch}${view.git.isDirty ? ' (uncommitted changes present)' : ''}`);
+    contextLines.push(`- Branch: ${view.git.branch}${view.git.isDirty ? ' (uncommitted changes present)' : ''}`);
   }
   const changed = view.git?.changedFiles ?? [];
   if (changed.length) {
-    push(`- Recently changed: ${changed.slice(0, 10).join(', ')}${changed.length > 10 ? ', ...' : ''}`);
+    contextLines.push(`- Recently changed: ${changed.slice(0, 10).join(', ')}${changed.length > 10 ? ', ...' : ''}`);
   }
-  push('');
+  if (contextLines.length) {
+    push('## Context', '');
+    push(...contextLines);
+    push('');
+  }
 
   push('## Your task', '');
   push('1. Identify the root cause from the evidence above. Do not guess beyond it.');
