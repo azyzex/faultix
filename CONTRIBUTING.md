@@ -7,7 +7,8 @@ what a change is expected to come with.
 
 ```bash
 npm install
-npm run verify   # lint + typecheck + tests. Run this before opening a PR.
+npm run verify            # lint + typecheck + 398 unit tests
+npm run test:integration  # 16 tests inside a real Extension Host
 ```
 
 Press `F5` in VS Code to launch an Extension Development Host. Point it at a

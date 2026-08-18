@@ -105,3 +105,29 @@ jobs:
           name: faultix-vsix
           path: faultix.vsix
           retention-days: 30
+
+  integration:
+    name: Extension Host tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run compile
+
+      # VS Code needs a display server; xvfb provides a virtual one on Linux.
+      - name: Run in Extension Host (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:integration
+
+      - name: Run in Extension Host (Windows)
+        if: runner.os == 'Windows'
+        run: npm run test:integration
