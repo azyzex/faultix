@@ -1,292 +1,283 @@
+/**
+ * Capture triggers.
+ *
+ * Watches the three places a failure surfaces in VS Code and turns each into a
+ * call to `buildIncident`. This file owns the event plumbing and nothing else:
+ * no parsing, no ranking, no rendering.
+ *
+ * Terminal reads start on the *start* event rather than the end event, because
+ * several shells close the stream as the command finishes and a read begun
+ * afterwards returns nothing.
+ */
+
 import * as vscode from 'vscode';
-import type { FaultixState } from '../core/state';
 import { getConfig } from '../core/config';
-import type { Incident, IncidentKind, TerminalEvidence } from '../core/models';
-import { redact } from '../privacy/redact';
+import type { Incident } from '../core/models';
+import { buildIncident } from './buildIncident';
 import { snapshotDiagnostics } from './diagnosticsCapture';
-import { extractCommandFileRefs, extractFileRefs, inferKindFromCommand, inferToolHint } from '../analyze/parse';
-import { rankSuspects } from '../analyze/rank';
-import { computeFingerprint } from '../analyze/fingerprint';
-import { collectGitEvidence } from '../analyze/git';
 
 export interface CaptureEngineDeps {
-  context: vscode.ExtensionContext;
-  state: FaultixState;
   output: vscode.LogOutputChannel;
 }
 
-export function createCaptureEngine({ context, state, output }: CaptureEngineDeps): vscode.Disposable & {
-  captureManual: (reason: string) => Promise<Incident | undefined>;
-  onIncident: vscode.Event<Incident>;
-} {
-  const disposables: vscode.Disposable[] = [];
+export interface CaptureEngine extends vscode.Disposable {
+  readonly onIncident: vscode.Event<Incident>;
+  captureManual(): Promise<Incident | undefined>;
+  /** True while automatic capture is suspended for this session. */
+  readonly paused: boolean;
+  setPaused(paused: boolean): void;
+}
 
+/** Debounce for diagnostics, which fire in bursts as a language server works. */
+const DIAGNOSTICS_SETTLE_MS = 1500;
+
+export function createCaptureEngine({ output }: CaptureEngineDeps): CaptureEngine {
+  const disposables: vscode.Disposable[] = [];
   const incidentEmitter = new vscode.EventEmitter<Incident>();
   disposables.push(incidentEmitter);
 
-  let lastDiagnosticsErrorCount = 0;
+  let paused = false;
 
-  const terminalOutputByExecution = new WeakMap<vscode.TerminalShellExecution, Promise<string>>();
+  // --- Terminal ------------------------------------------------------------
 
-  const onStart = vscode.window.onDidStartTerminalShellExecution((e: vscode.TerminalShellExecutionStartEvent) => {
-    const cfg = getConfig();
-    if (!cfg.autoOnNonZeroExit) {
+  interface PendingExecution {
+    output: Promise<string>;
+    startedAt: number;
+  }
+
+  const pending = new WeakMap<vscode.TerminalShellExecution, PendingExecution>();
+
+  disposables.push(
+    vscode.window.onDidStartTerminalShellExecution((event) => {
+      if (paused) {
+        return;
+      }
+      const config = getConfig();
+      if (!config.autoOnNonZeroExit) {
+        return;
+      }
+      pending.set(event.execution, {
+        output: readExecutionOutput(event.execution, config.maxChars),
+        startedAt: Date.now()
+      });
+    })
+  );
+
+  disposables.push(
+    vscode.window.onDidEndTerminalShellExecution(async (event) => {
+      const record = pending.get(event.execution);
+      pending.delete(event.execution);
+
+      if (paused) {
+        return;
+      }
+
+      const config = getConfig();
+      if (!config.autoOnNonZeroExit) {
+        return;
+      }
+      // Exit code 0 is success; undefined means the shell never reported one.
+      if (event.exitCode === 0 || event.exitCode === undefined) {
+        return;
+      }
+
+      const commandLine = event.execution.commandLine?.value?.trim();
+      if (!commandLine) {
+        return;
+      }
+
+      await guard(output, 'terminal capture', async () => {
+        const incident = await buildIncident({
+          trigger: 'terminal',
+          config,
+          rawOutput: record ? await record.output : '',
+          commandLine,
+          cwd: event.execution.cwd?.fsPath,
+          exitCode: event.exitCode,
+          durationMs: record ? Date.now() - record.startedAt : undefined
+        });
+        incidentEmitter.fire(incident);
+      });
+    })
+  );
+
+  // --- Tasks ---------------------------------------------------------------
+
+  const taskStarts = new WeakMap<vscode.TaskExecution, number>();
+
+  disposables.push(
+    vscode.tasks.onDidStartTaskProcess((event) => {
+      taskStarts.set(event.execution, Date.now());
+    })
+  );
+
+  disposables.push(
+    vscode.tasks.onDidEndTaskProcess(async (event) => {
+      const startedAt = taskStarts.get(event.execution);
+      taskStarts.delete(event.execution);
+
+      if (paused) {
+        return;
+      }
+
+      const config = getConfig();
+      if (!config.autoOnTaskFailure) {
+        return;
+      }
+      if (event.exitCode === 0 || event.exitCode === undefined) {
+        return;
+      }
+
+      await guard(output, 'task capture', async () => {
+        const incident = await buildIncident({
+          trigger: 'task',
+          config,
+          taskName: event.execution.task.name,
+          exitCode: event.exitCode,
+          durationMs: startedAt ? Date.now() - startedAt : undefined
+        });
+        incidentEmitter.fire(incident);
+      });
+    })
+  );
+
+  // --- Diagnostics ---------------------------------------------------------
+
+  // Tracked across events so a spike is measured against the previous settled
+  // state rather than against whatever the language server emitted 5ms ago.
+  let lastErrorCount = countErrors();
+  let settleTimer: NodeJS.Timeout | undefined;
+
+  disposables.push(
+    vscode.languages.onDidChangeDiagnostics(() => {
+      if (paused) {
+        return;
+      }
+      if (!getConfig().autoOnDiagnosticsSpike) {
+        return;
+      }
+
+      if (settleTimer) {
+        clearTimeout(settleTimer);
+      }
+      settleTimer = setTimeout(() => {
+        settleTimer = undefined;
+        void onDiagnosticsSettled();
+      }, DIAGNOSTICS_SETTLE_MS);
+    })
+  );
+
+  disposables.push(
+    new vscode.Disposable(() => {
+      if (settleTimer) {
+        clearTimeout(settleTimer);
+      }
+    })
+  );
+
+  async function onDiagnosticsSettled(): Promise<void> {
+    const config = getConfig();
+    const current = countErrors();
+    const delta = current - lastErrorCount;
+    lastErrorCount = current;
+
+    if (delta < config.diagnosticsSpikeThreshold) {
       return;
     }
-    // Start reading immediately; some shells don't allow reading after the end event.
-    const maxChars = Math.min(cfg.maxChars, 50000);
-    terminalOutputByExecution.set(e.execution, readExecutionOutput(e.execution, maxChars));
-  });
 
-  const onEnd = vscode.window.onDidEndTerminalShellExecution(async (e: vscode.TerminalShellExecutionEndEvent) => {
-    const pendingOutput = terminalOutputByExecution.get(e.execution);
-    terminalOutputByExecution.delete(e.execution);
+    await guard(output, 'diagnostics capture', async () => {
+      const incident = await buildIncident({
+        trigger: 'diagnostics',
+        config,
+        kindOverride: 'typecheck',
+        titleOverride: `Diagnostics spike: +${delta} errors`
+      });
+      incidentEmitter.fire(incident);
+    });
+  }
 
-    const cfg = getConfig();
-    if (!cfg.autoOnNonZeroExit) {
-      return;
-    }
-    if (e.exitCode === 0) {
-      return;
-    }
+  // --- Manual --------------------------------------------------------------
 
-    const rawOutput = pendingOutput
-      ? await pendingOutput
-      : await readExecutionOutput(e.execution, Math.min(cfg.maxChars, 50000));
+  async function captureManual(): Promise<Incident | undefined> {
+    const config = getConfig();
+    let incident: Incident | undefined;
 
-    const incident = await captureFromTerminalEndEvent(e, context, output, rawOutput);
-    if (!incident) {
-      return;
-    }
-
-    state.setLatestIncident(incident);
-    await state.appendToHistory(incident);
-    incidentEmitter.fire(incident);
-  });
-
-  const onDiagnostics = vscode.languages.onDidChangeDiagnostics(async () => {
-    const cfg = getConfig();
-    if (!cfg.autoOnDiagnosticsSpike) {
-      return;
-    }
-
-    const diag = snapshotDiagnostics(cfg.maxDiagnostics);
-    const delta = diag.errors - lastDiagnosticsErrorCount;
-    lastDiagnosticsErrorCount = diag.errors;
-
-    if (delta < cfg.diagnosticsSpikeThreshold) {
-      return;
-    }
-
-    const incident = await buildIncident({
-      kind: 'typecheck',
-      title: `Diagnostics spike (+${delta} errors)`,
-      terminal: undefined,
-      output,
-      context
+    await guard(output, 'manual capture', async () => {
+      incident = await buildIncident({
+        trigger: 'manual',
+        config,
+        titleOverride: 'Manual capture'
+      });
+      incidentEmitter.fire(incident);
     });
 
-    state.setLatestIncident(incident);
-    await state.appendToHistory(incident);
-    incidentEmitter.fire(incident);
-  });
-
-  const taskStarts = new WeakMap<vscode.TaskExecution, { taskName: string; startedAt: string }>();
-
-  const onTaskStart = vscode.tasks.onDidStartTaskProcess((e) => {
-    taskStarts.set(e.execution, { taskName: e.execution.task.name, startedAt: new Date().toISOString() });
-  });
-
-  const onTaskEnd = vscode.tasks.onDidEndTaskProcess(async (e) => {
-    const cfg = getConfig();
-    if (!cfg.autoOnNonZeroExit) {
-      return;
-    }
-
-    const exitCode = e.exitCode;
-    if (exitCode === 0 || exitCode === undefined || exitCode === null) {
-      return;
-    }
-
-    const taskName = e.execution.task.name;
-    const kind = inferKindFromTaskName(taskName);
-
-    const started = taskStarts.get(e.execution);
-
-    const incident = await buildIncident({
-      kind,
-      title: `Task failed (${exitCode}): ${taskName}`,
-      terminal: undefined,
-      output,
-      context
-    });
-
-    if (started?.startedAt) {
-      // best-effort: enrich id uniqueness by leaving title as-is; timestamps already included in incident.id
-      void started;
-    }
-
-    state.setLatestIncident(incident);
-    await state.appendToHistory(incident);
-    incidentEmitter.fire(incident);
-  });
-
-  disposables.push(onStart, onEnd, onDiagnostics, onTaskStart, onTaskEnd);
-
-  async function captureManual(reason: string): Promise<Incident | undefined> {
-    const cfg = getConfig();
-    const last = state.latestIncident;
-    const kind: IncidentKind = last?.kind ?? 'unknown';
-
-    const incident = await buildIncident({
-      kind,
-      title: reason,
-      terminal: last?.terminal,
-      output,
-      context
-    });
-
-    state.setLatestIncident(incident);
-    await state.appendToHistory(incident);
-    incidentEmitter.fire(incident);
     return incident;
   }
 
-  return Object.assign(vscode.Disposable.from(...disposables), {
-    captureManual,
-    onIncident: incidentEmitter.event
-  });
-}
-
-function inferKindFromTaskName(name: string): IncidentKind {
-  const s = name.toLowerCase();
-  if (s.includes('test') || s.includes('jest') || s.includes('vitest') || s.includes('pytest')) {
-    return 'test';
-  }
-  if (s.includes('lint') || s.includes('eslint') || s.includes('pylint') || s.includes('ruff')) {
-    return 'lint';
-  }
-  if (s.includes('typecheck') || s.includes('tsc') || s.includes('mypy')) {
-    return 'typecheck';
-  }
-  if (s.includes('build') || s.includes('compile') || s.includes('bundle')) {
-    return 'build';
-  }
-  if (s.includes('install') || s.includes('npm install') || s.includes('pnpm install') || s.includes('yarn install')) {
-    return 'packageinstall';
-  }
-  return 'unknown';
-}
-
-async function captureFromTerminalEndEvent(
-  e: vscode.TerminalShellExecutionEndEvent,
-  context: vscode.ExtensionContext,
-  output: vscode.LogOutputChannel,
-  rawOutputOverride?: string
-): Promise<Incident | undefined> {
-  const cfg = getConfig();
-
-  const commandLine = e.execution.commandLine?.value ?? '';
-  if (!commandLine.trim()) {
-    return undefined;
-  }
-
-  const kind = inferKindFromCommand(commandLine);
-  const toolHint = inferToolHint(commandLine);
-
-  const rawOutput = rawOutputOverride ?? (await readExecutionOutput(e.execution, Math.min(cfg.maxChars, 50000)));
-  const safeOutput = cfg.redactSecrets ? redact(rawOutput) : rawOutput;
-
-  const excerpt = excerptLines(safeOutput, cfg.maxTerminalLines);
-  const fileRefsFromOutput = extractFileRefs(excerpt, context);
-  const fileRefsFromCommand = extractCommandFileRefs(commandLine, context);
-
-  const fileRefs: TerminalEvidence['fileRefs'] = [];
-  const seen = new Set<string>();
-  for (const ref of [...fileRefsFromOutput, ...fileRefsFromCommand]) {
-    const key = ref.uri.toString();
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    fileRefs.push(ref);
-  }
-
-  const terminal: TerminalEvidence = {
-    commandLine,
-    cwd: e.execution.cwd,
-    exitCode: e.exitCode,
-    toolHint,
-    excerpt,
-    fileRefs
-  };
-
-  return await buildIncident({
-    kind,
-    title: `Command failed (${e.exitCode}): ${commandLine}`,
-    terminal,
-    output,
-    context
-  });
-}
-
-async function buildIncident(args: {
-  kind: IncidentKind;
-  title: string;
-  terminal: TerminalEvidence | undefined;
-  output: vscode.LogOutputChannel;
-  context: vscode.ExtensionContext;
-}): Promise<Incident> {
-  const cfg = getConfig();
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-
-  const diagnostics = snapshotDiagnostics(cfg.maxDiagnostics);
-  const git = await collectGitEvidence({ enabled: cfg.gitEnabled, workspaceFolder: workspaceFolder?.uri });
-
-  const suspects = rankSuspects({ terminal: args.terminal, diagnostics, git, workspaceFolder: workspaceFolder?.uri });
-  const fingerprint = computeFingerprint({ kind: args.kind, terminal: args.terminal, diagnostics, suspects });
-
-  const id = `${new Date().toISOString()}_${fingerprint.signature}`;
-
   return {
-    id,
-    createdAt: new Date().toISOString(),
-    kind: args.kind,
-    status: 'unresolved',
-    title: args.title,
-    workspaceName: vscode.workspace.name,
-    workspaceFolder: workspaceFolder?.uri,
-    terminal: args.terminal,
-    diagnostics,
-    git,
-    suspects,
-    fingerprint
+    onIncident: incidentEmitter.event,
+    captureManual,
+    get paused() {
+      return paused;
+    },
+    setPaused(value: boolean) {
+      paused = value;
+      output.info(`Automatic capture ${value ? 'paused' : 'resumed'}.`);
+    },
+    dispose() {
+      vscode.Disposable.from(...disposables).dispose();
+    }
   };
 }
 
+function countErrors(): number {
+  let errors = 0;
+  for (const [, diagnostics] of vscode.languages.getDiagnostics()) {
+    for (const diagnostic of diagnostics) {
+      if (diagnostic.severity === vscode.DiagnosticSeverity.Error) {
+        errors++;
+      }
+    }
+  }
+  return errors;
+}
+
+/**
+ * Reads a shell execution's output stream.
+ *
+ * Bounded by `maxChars` so a runaway command cannot grow the buffer without
+ * limit, and tolerant of shells whose integration does not support reading.
+ */
 async function readExecutionOutput(execution: vscode.TerminalShellExecution, maxChars: number): Promise<string> {
+  const budget = Math.min(Math.max(maxChars, 2000), 200000);
   let text = '';
+
   try {
     for await (const chunk of execution.read()) {
       if (!chunk) {
         continue;
       }
       text += chunk;
-      if (text.length >= maxChars) {
+      if (text.length >= budget) {
         break;
       }
     }
   } catch {
-    // If read() fails or isn't supported, fall back to empty output.
+    // Shell integration is unavailable or the stream closed early; the
+    // incident is still worth capturing from the command line alone.
   }
+
   return text;
 }
 
-function excerptLines(text: string, maxLines: number): string {
-  const lines = text.replace(/\r\n/g, '\n').split('\n');
-  if (lines.length <= maxLines) {
-    return lines.join('\n');
+/**
+ * Runs a capture without ever letting it surface as an unhandled rejection.
+ * A failed capture must never break the user's terminal or task.
+ */
+async function guard(output: vscode.LogOutputChannel, what: string, run: () => Promise<void>): Promise<void> {
+  try {
+    await run();
+  } catch (error) {
+    output.error(`Faultix ${what} failed: ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
   }
-  const tail = lines.slice(-maxLines);
-  return tail.join('\n');
 }

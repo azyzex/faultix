@@ -1,44 +1,156 @@
 {
   "name": "faultix",
   "displayName": "Faultix",
-  "description": "Turns build/test/runtime failures into compact, agent-ready repair briefs (local-first).",
-  "version": "0.1.0",
-  "publisher": "your-publisher",
-  "author": "",
+  "description": "Turns build, test and runtime failures into compact, agent-ready repair briefs. Local-first, no network calls.",
+  "version": "0.2.0",
+  "publisher": "azyzex",
+  "author": {
+    "name": "AZYZ"
+  },
   "license": "MIT",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#1e1e2e",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/azyzex/faultix.git"
+  },
+  "bugs": {
+    "url": "https://github.com/azyzex/faultix/issues"
+  },
+  "homepage": "https://github.com/azyzex/faultix#readme",
   "engines": {
-    "vscode": "^1.88.0"
+    "vscode": "^1.88.0",
+    "node": ">=20"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Testing",
+    "Linters"
+  ],
+  "keywords": [
+    "ai",
+    "debugging",
+    "errors",
+    "diagnostics",
+    "agent",
+    "llm",
+    "terminal",
+    "stack trace"
   ],
   "activationEvents": [
     "onStartupFinished"
   ],
   "main": "./out/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "In an untrusted workspace Faultix does not run git or read files for code context."
+    },
+    "virtualWorkspaces": {
+      "supported": "limited",
+      "description": "Faultix reads code context and git state from the local filesystem, which a virtual workspace does not provide."
+    }
+  },
   "contributes": {
     "commands": [
       {
         "command": "faultix.createRepairBrief",
-        "title": "Faultix: Create Repair Brief"
+        "title": "Capture Repair Brief Now",
+        "category": "Faultix",
+        "icon": "$(add)"
       },
       {
         "command": "faultix.openLatestIncident",
-        "title": "Faultix: Open Latest Incident"
+        "title": "Open Latest Brief",
+        "category": "Faultix",
+        "icon": "$(markdown)"
+      },
+      {
+        "command": "faultix.copyRepairPrompt",
+        "title": "Copy Agent Prompt",
+        "category": "Faultix",
+        "icon": "$(clippy)"
       },
       {
         "command": "faultix.copyLatestBrief",
-        "title": "Faultix: Copy Latest Brief"
+        "title": "Copy Brief as Markdown",
+        "category": "Faultix"
       },
       {
         "command": "faultix.rerunLatestCommand",
-        "title": "Faultix: Rerun Latest Failing Command"
+        "title": "Re-run Failing Command",
+        "category": "Faultix",
+        "icon": "$(debug-restart)"
       },
       {
         "command": "faultix.markLatestResolved",
-        "title": "Faultix: Mark Latest Incident Resolved"
+        "title": "Mark Latest Incident Resolved",
+        "category": "Faultix",
+        "icon": "$(check)"
+      },
+      {
+        "command": "faultix.openOutputFolder",
+        "title": "Reveal Output Folder",
+        "category": "Faultix",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "faultix.clearHistory",
+        "title": "Clear History",
+        "category": "Faultix",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "faultix.togglePause",
+        "title": "Pause or Resume Automatic Capture",
+        "category": "Faultix",
+        "icon": "$(debug-pause)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "faultix.createRepairBrief",
+          "when": "view == faultix.incidents",
+          "group": "navigation@1"
+        },
+        {
+          "command": "faultix.openLatestIncident",
+          "when": "view == faultix.incidents",
+          "group": "navigation@2"
+        },
+        {
+          "command": "faultix.copyRepairPrompt",
+          "when": "view == faultix.incidents",
+          "group": "navigation@3"
+        },
+        {
+          "command": "faultix.togglePause",
+          "when": "view == faultix.incidents",
+          "group": "1_state@1"
+        },
+        {
+          "command": "faultix.openOutputFolder",
+          "when": "view == faultix.incidents",
+          "group": "1_state@2"
+        },
+        {
+          "command": "faultix.clearHistory",
+          "when": "view == faultix.incidents",
+          "group": "9_danger@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "faultix.markLatestResolved",
+          "when": "view == faultix.incidents && viewItem == faultix.incident",
+          "group": "inline"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -52,29 +164,45 @@
       "faultix": [
         {
           "id": "faultix.incidents",
-          "name": "Incidents",
+          "name": "Failures",
           "icon": "media/faultix.svg"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "faultix.incidents",
+        "contents": "Faultix captures a repair brief whenever a command, task, or type-check fails.\n\nRun something that fails, or capture the current state manually.\n[Capture Repair Brief](command:faultix.createRepairBrief)"
+      }
+    ],
     "configuration": {
       "title": "Faultix",
       "properties": {
         "faultix.capture.autoOnNonZeroExit": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically capture a repair brief when a terminal command exits non-zero."
+          "markdownDescription": "Capture a repair brief when a terminal command exits with a non-zero status. Requires shell integration.",
+          "order": 1
+        },
+        "faultix.capture.autoOnTaskFailure": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Capture a repair brief when a VS Code task exits with a non-zero status.",
+          "order": 2
         },
         "faultix.capture.autoOnDiagnosticsSpike": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically capture a repair brief when error diagnostics increase sharply."
+          "markdownDescription": "Capture a repair brief when the number of error diagnostics rises sharply.",
+          "order": 3
         },
         "faultix.capture.diagnosticsSpikeThreshold": {
           "type": "number",
           "default": 10,
           "minimum": 1,
-          "description": "Minimum increase in error diagnostics to trigger an incident."
+          "maximum": 10000,
+          "markdownDescription": "How many new errors constitute a spike.",
+          "order": 4
         },
         "faultix.output.mode": {
           "type": "string",
@@ -83,41 +211,135 @@
             "previewRequired",
             "clipboardOnly"
           ],
+          "enumDescriptions": [
+            "Write brief files into the workspace immediately.",
+            "Ask before writing anything into the workspace.",
+            "Never write to disk; use the copy commands instead."
+          ],
           "default": "autoWrite",
-          "description": "How Faultix outputs repair briefs."
+          "markdownDescription": "How briefs are delivered.",
+          "order": 10
         },
         "faultix.output.dir": {
           "type": "string",
           "default": ".ai-repair",
-          "description": "Workspace-relative output directory."
+          "markdownDescription": "Workspace-relative folder for briefs. Paths that escape the workspace are refused.",
+          "order": 11
+        },
+        "faultix.output.keepHistory": {
+          "type": "number",
+          "default": 50,
+          "minimum": 0,
+          "maximum": 1000,
+          "markdownDescription": "How many archived incidents to keep. Set to `0` to disable the archive.",
+          "order": 12
         },
         "faultix.output.maxChars": {
           "type": "number",
           "default": 60000,
-          "minimum": 5000,
-          "description": "Maximum total characters to write per incident across artifacts."
+          "minimum": 2000,
+          "maximum": 1000000,
+          "markdownDescription": "Maximum characters written per artifact.",
+          "order": 13
         },
         "faultix.output.maxTerminalLines": {
           "type": "number",
           "default": 200,
-          "minimum": 20,
-          "description": "Maximum terminal lines to keep (excerpted) for an incident."
+          "minimum": 10,
+          "maximum": 5000,
+          "markdownDescription": "Maximum terminal lines kept in the excerpt. The head and tail are preserved.",
+          "order": 14
         },
         "faultix.output.maxDiagnostics": {
           "type": "number",
-          "default": 100,
-          "minimum": 10,
-          "description": "Maximum diagnostics entries to include in an incident."
+          "default": 50,
+          "minimum": 0,
+          "maximum": 1000,
+          "markdownDescription": "Maximum editor diagnostics listed in a brief.",
+          "order": 15
+        },
+        "faultix.output.maxErrors": {
+          "type": "number",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 200,
+          "markdownDescription": "Maximum parsed errors listed in a brief.",
+          "order": 16
+        },
+        "faultix.output.maxSuspects": {
+          "type": "number",
+          "default": 8,
+          "minimum": 1,
+          "maximum": 50,
+          "markdownDescription": "Maximum ranked suspect files listed in a brief.",
+          "order": 17
+        },
+        "faultix.output.maxSnippets": {
+          "type": "number",
+          "default": 3,
+          "minimum": 0,
+          "maximum": 20,
+          "markdownDescription": "How many inline code snippets to embed. Set to `0` to disable.",
+          "order": 18
+        },
+        "faultix.output.snippetContextLines": {
+          "type": "number",
+          "default": 6,
+          "minimum": 0,
+          "maximum": 50,
+          "markdownDescription": "Lines of code to include either side of a failure location.",
+          "order": 19
         },
         "faultix.privacy.redactSecrets": {
           "type": "boolean",
           "default": true,
-          "description": "Redact common secret patterns from outputs."
+          "markdownDescription": "Redact tokens, keys, passwords and credentials before anything is written or copied.",
+          "order": 30
+        },
+        "faultix.privacy.redactEmails": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Also redact email addresses.",
+          "order": 31
+        },
+        "faultix.privacy.anonymizeHomePaths": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Replace your home directory with `<home>` so briefs can be shared safely.",
+          "order": 32
         },
         "faultix.git.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Include best-effort git branch + diff summary."
+          "markdownDescription": "Include branch, dirty state and changed files from git.",
+          "order": 40
+        },
+        "faultix.analysis.ignoredFolders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Extra folder names to treat as vendored, in addition to `node_modules`, `dist`, `target` and similar.",
+          "order": 41
+        },
+        "faultix.ui.openOnCapture": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Open the brief automatically after each capture.",
+          "order": 50
+        },
+        "faultix.ui.notifyOnCapture": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show a notification when a failure is captured.",
+          "order": 51
+        },
+        "faultix.ui.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show an unresolved-failure indicator in the status bar.",
+          "order": 52
         }
       }
     }
@@ -126,11 +348,15 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint .",
-    "package": "vsce package",
+    "typecheck": "tsc -p ./ --noEmit",
     "pretest": "npm run compile",
+    "test": "npm run test:unit",
     "test:unit": "mocha --ui tdd \"out/test/suite/**/*.test.js\"",
+    "test:coverage": "c8 --reporter=text --reporter=lcov npm run test:unit",
     "test:integration": "node ./out/test/runTest.js",
-    "test": "npm run test:unit"
+    "verify": "npm run lint && npm run typecheck && npm run test:unit",
+    "package": "vsce package --out faultix.vsix",
+    "publish": "vsce publish"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.6",
