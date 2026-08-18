@@ -169,6 +169,24 @@ export class FaultixState implements vscode.Disposable {
     await this.writeHistory(history);
   }
 
+  /**
+   * Attaches the archive path to an already-recorded incident.
+   *
+   * Deliberately separate from `recordIncident`: the brief has to be rendered
+   * before the archive exists, but re-recording afterwards would count the
+   * same failure twice and inflate every repeat count.
+   */
+  public async setArchivePath(incidentId: string, archivePath: string): Promise<void> {
+    const history = await this.readHistory();
+    const entry = history.incidents.find((candidate) => candidate.id === incidentId);
+    if (!entry || entry.archivePath === archivePath) {
+      return;
+    }
+
+    entry.archivePath = archivePath;
+    await this.writeHistory(history);
+  }
+
   public async clearHistory(): Promise<void> {
     await this.writeHistory(emptyHistory());
   }

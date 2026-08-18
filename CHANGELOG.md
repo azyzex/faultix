@@ -69,6 +69,13 @@ control-code garbage.
 - Windows-only line-ending normalization corrupted recorded test fixtures.
 - A failed capture could surface as an unhandled rejection; captures are now
   isolated and logged.
+- Every capture was recorded twice, so repeat counts advanced in steps of two
+  and history gained duplicate entries. The archive path is now patched onto
+  the existing record instead of re-recording it.
+- `engines.vscode` claimed `^1.88.0` while the extension depends on the
+  terminal shell integration API finalized in 1.93, so an install on 1.88
+  would have failed. `@types/vscode` is now pinned to the same floor so the
+  compiler enforces it.
 
 ### Security
 

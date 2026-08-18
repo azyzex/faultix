@@ -219,22 +219,37 @@ suite('integration/capture is resilient', () => {
     }
   });
 
-  test('the same failure is recognised as a repeat', async function () {
-    this.timeout(20000);
+  /** Reads the repeat count recorded for the most recent capture. */
+  function currentCount(): number {
+    const raw = fs.readFileSync(path.join(outputDir(), 'latest', 'incident.json'), 'utf8');
+    return (JSON.parse(raw) as { fingerprint: { count: number } }).fingerprint.count;
+  }
 
-    await vscode.workspace
-      .getConfiguration('faultix')
-      .update('output.mode', undefined, vscode.ConfigurationTarget.Workspace);
-    await vscode.workspace
-      .getConfiguration('faultix')
-      .update('output.dir', undefined, vscode.ConfigurationTarget.Workspace);
+  test('counts each repeat exactly once', async function () {
+    this.timeout(40000);
+
+    const config = vscode.workspace.getConfiguration('faultix');
+    await config.update('output.mode', undefined, vscode.ConfigurationTarget.Workspace);
+    await config.update('output.dir', undefined, vscode.ConfigurationTarget.Workspace);
 
     await vscode.commands.executeCommand('faultix.createRepairBrief');
     await waitFor(() => fs.existsSync(path.join(outputDir(), 'latest', 'incident.json')));
 
-    const incident = JSON.parse(fs.readFileSync(path.join(outputDir(), 'latest', 'incident.json'), 'utf8')) as {
-      fingerprint: { count: number };
-    };
-    assert.ok(incident.fingerprint.count >= 2, `expected a repeat count, got ${incident.fingerprint.count}`);
+    // Measure a delta rather than an absolute value: earlier tests in this
+    // file have already captured, and clearHistory needs a modal nobody can
+    // answer here. "At least N" would not have caught double counting.
+    const before = currentCount();
+    const captures = 3;
+
+    for (let i = 0; i < captures; i++) {
+      await vscode.commands.executeCommand('faultix.createRepairBrief');
+      await waitFor(() => currentCount() > before + i - 1);
+    }
+
+    assert.strictEqual(
+      currentCount(),
+      before + captures,
+      'each capture of the same failure must increment the repeat count exactly once'
+    );
   });
 });

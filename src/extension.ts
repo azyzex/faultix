@@ -43,7 +43,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
       const result = await writeArtifacts({ state, incident, config, output });
       if (result.archivePath) {
-        await state.recordIncident(incident, result.archivePath);
+        // Patch the existing entry rather than recording again: a second
+        // recordIncident would count this failure twice.
+        await state.setArchivePath(incident.id, result.archivePath);
       }
 
       tree.refresh();
