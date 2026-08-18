@@ -372,7 +372,7 @@
     "eslint": "^9.0.0",
     "glob": "^10.4.5",
     "mocha": "^11.8.0",
-    "typescript": "^5.7.0"
+    "typescript": "^7.0.2"
   },
   "overrides": {
     "serialize-javascript": "^7.1.0",
