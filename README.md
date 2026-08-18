@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/azyzex/faultix/actions/workflows/ci.yml/badge.svg)](https://github.com/azyzex/faultix/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.88-007ACC.svg)](https://code.visualstudio.com/)
+[![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.93-007ACC.svg)](https://code.visualstudio.com/)
 
 When a build breaks, the usual move is to scroll the terminal, select a few
 hundred lines, and paste them into a chat window along with a guess about what
@@ -209,7 +209,8 @@ so it runs under plain mocha. The VS Code layer is a thin adapter over it.
 Recorded failure output lives in `src/test/fixtures` — adding a toolchain means
 adding a fixture and an expectation, not writing a mock.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pipeline fits together.
 
 ## License
 

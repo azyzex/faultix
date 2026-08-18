@@ -94,6 +94,15 @@ Maintainers only:
    to a GitHub release, and publishes to the Marketplace when a `VSCE_PAT`
    secret is configured.
 
+## Version floor
+
+`engines.vscode` and `@types/vscode` must move together, and `@types/vscode`
+is pinned with `~` rather than `^`. With a caret the types float dozens of
+minor versions ahead of the declared engine, so the compiler happily accepts
+APIs that do not exist in the oldest VS Code the extension claims to support.
+The current floor is 1.93, set by the terminal shell integration API
+(`onDidStartTerminalShellExecution` and `TerminalShellExecution.read`).
+
 ## Dependency overrides
 
 `package.json` pins `serialize-javascript` and `diff` via `overrides` to pull

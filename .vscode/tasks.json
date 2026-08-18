@@ -4,8 +4,29 @@
     {
       "type": "npm",
       "script": "compile",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": "$tsc",
+      "presentation": { "reveal": "silent" }
+    },
+    {
+      "type": "npm",
+      "script": "watch",
+      "isBackground": true,
       "group": "build",
-      "problemMatcher": "$tsc"
+      "problemMatcher": "$tsc-watch",
+      "presentation": { "reveal": "never" }
+    },
+    {
+      "type": "npm",
+      "script": "test:unit",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "type": "npm",
+      "script": "verify",
+      "group": "test",
+      "problemMatcher": ["$tsc", "$eslint-stylish"]
     }
   ]
 }

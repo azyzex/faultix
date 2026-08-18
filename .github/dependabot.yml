@@ -15,6 +15,10 @@ updates:
     ignore:
       - dependency-name: '*'
         update-types: [version-update:semver-major]
+      # @types/vscode must track engines.vscode, not the newest release.
+      # Letting it float lets the compiler accept APIs that do not exist in
+      # the minimum VS Code the extension claims to support.
+      - dependency-name: '@types/vscode'
     commit-message:
       prefix: chore
 
