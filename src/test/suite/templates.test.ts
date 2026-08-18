@@ -4,6 +4,7 @@ import {
   buildRepairPrompt,
   fenceLanguage,
   formatErrorLine,
+  formatExitCode,
   formatLocation,
   oneLine,
   renderSnippet,
@@ -293,5 +294,25 @@ suite('templates/buildRepairPrompt', () => {
       fingerprint: { signature: 's', count: 1, firstSeen: 'a', lastSeen: 'b' }
     });
     assert.ok(minimal.includes('## Your task'));
+  });
+});
+
+suite('templates/formatExitCode', () => {
+  test('passes an ordinary status through', () => {
+    assert.strictEqual(formatExitCode(1), '1');
+    assert.strictEqual(formatExitCode(0), '0');
+  });
+
+  test('converts a Windows unsigned status back to its signed form', () => {
+    // npm on Windows exits with errno -4058, reported as 4294963238.
+    assert.strictEqual(formatExitCode(4294963238), '-4058');
+  });
+
+  test('leaves an already-negative status alone', () => {
+    assert.strictEqual(formatExitCode(-4058), '-4058');
+  });
+
+  test('does not mangle a large legitimate status', () => {
+    assert.strictEqual(formatExitCode(255), '255');
   });
 });

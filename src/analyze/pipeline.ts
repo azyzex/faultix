@@ -194,12 +194,13 @@ export function analyzeFailure(input: AnalyzeInput): Incident {
     Math.floor(options.maxChars * 0.6)
   );
 
-  const primaryView = primary ? toErrorView(primary, resolver, workspaceRoot) : undefined;
+  const anonymize = options.anonymizePaths ? anonymizeHomePaths : (text: string): string => text;
+  const primaryView = primary ? toErrorView(primary, resolver, workspaceRoot, anonymize) : undefined;
   const fallbackTitle = input.titleOverride ?? deriveTitle(input);
   const rawSummary = primaryView
     ? summarizeError(primaryView)
     : summarizeFailure(redaction.text, fallbackTitle);
-  const summary = options.anonymizePaths ? anonymizeHomePaths(rawSummary) : rawSummary;
+  const summary = anonymize(rawSummary);
   const createdAt = now.toISOString();
 
   return {
@@ -208,7 +209,7 @@ export function analyzeFailure(input: AnalyzeInput): Incident {
     kind,
     status: 'unresolved',
     trigger: input.trigger,
-    title: input.titleOverride ?? deriveTitle(input),
+    title: anonymize(input.titleOverride ?? deriveTitle(input)),
     summary,
     workspaceName: input.workspaceName,
     workspaceRoot,
@@ -224,7 +225,7 @@ export function analyzeFailure(input: AnalyzeInput): Incident {
       : undefined,
 
     primaryError: primaryView,
-    errors: extracted.map((error) => toErrorView(error, resolver, workspaceRoot)),
+    errors: extracted.map((error) => toErrorView(error, resolver, workspaceRoot, anonymize)),
     terminalExcerpt: excerpt || undefined,
     snippets,
 
@@ -275,13 +276,23 @@ function deriveTitle(input: AnalyzeInput): string {
   return 'Failure captured';
 }
 
-function toErrorView(error: ExtractedError, resolver: PathResolver, workspaceRoot: string | undefined): ErrorView {
+function toErrorView(
+  error: ExtractedError,
+  resolver: PathResolver,
+  workspaceRoot: string | undefined,
+  anonymize: (text: string) => string
+): ErrorView {
   const absolute = error.file ? resolver.toAbsolute(error.file) : undefined;
+  const file = absolute ? displayPath(workspaceRoot, absolute) : error.file;
   return {
     severity: error.severity,
-    message: error.message,
+    // The message is raw tool text. Tools print absolute paths inside their
+    // messages, not only in the surrounding output, so anonymization has to
+    // reach in here too - otherwise a brief that scrubs its terminal excerpt
+    // still leaks the home directory through the error list.
+    message: anonymize(error.message),
     code: error.code,
-    file: absolute ? displayPath(workspaceRoot, absolute) : error.file,
+    file: file ? anonymize(file) : undefined,
     line: error.line,
     column: error.column,
     matcher: error.matcher

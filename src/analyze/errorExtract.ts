@@ -131,6 +131,15 @@ interface Matcher {
   pattern: RegExp;
   confidence: number;
   build: (c: Captures) => Omit<ExtractedError, 'matcher' | 'index' | 'confidence' | 'raw'> | undefined;
+  /**
+   * When true, a matching pattern claims the line even if `build` discards it.
+   *
+   * Tools that prefix every line with their own marker (npm) emit bookkeeping
+   * alongside the real message. Recognising a line as that tool's noise is a
+   * decision, and letting it fall through to the keyword fallback would
+   * re-admit exactly what was just rejected.
+   */
+  claimsLine?: boolean;
 }
 
 const severityOf = (word: string | undefined): ExtractedSeverity =>
@@ -424,13 +433,36 @@ const MATCHERS: Matcher[] = [
     }
   },
   {
-    // npm: npm ERR! code ERESOLVE
+    // npm. The prefix changed from `npm ERR!` to `npm error` in npm 10, so
+    // both spellings have to be accepted.
     name: 'npm',
-    pattern: /^npm ERR!\s+(.+)$/,
+    pattern: /^npm (?:ERR!|error)\s+(.+)$/,
     confidence: CONF.toolPrefixed,
+    claimsLine: true,
     build: (c) => {
-      const message = c.req(1).trim();
-      if (/^(A complete log|code |errno |path |command |gyp |peer |node_modules)/i.test(message)) {
+      let message = c.req(1).trim();
+
+      // npm tags most lines with a short lowercase marker. On its own the tag
+      // carries nothing (`syscall open`, `errno -4058`); in front of a
+      // sentence it is just a prefix on the one line that matters. Uppercase
+      // codes like ERESOLVE are left alone, because there the code *is* the
+      // information.
+      const tagged = /^(enoent|eresolve|eacces|eexist|etarget|notarget|elifecycle|network|code|syscall|errno|path|command)\b\s*(.*)$/.exec(
+        message
+      );
+      if (tagged) {
+        // Same honest-typing rule as the Captures accessor: an exec result
+        // indexes as `string`, so state the possibility explicitly.
+        const rest = ((tagged[2] as string | undefined) ?? '').trim();
+        // A bare tag, or one followed by a single token such as a path or an
+        // errno, is bookkeeping rather than a description.
+        if (rest.length < 12 || !/\s/.test(rest)) {
+          return undefined;
+        }
+        message = rest;
+      }
+
+      if (/^(A complete log|This is related to|gyp |peer |node_modules)/i.test(message)) {
         return undefined;
       }
       return { severity: 'error', message };
@@ -569,6 +601,9 @@ export function extractErrors(text: string): ExtractedError[] {
       }
 
       if (!built || !built.message) {
+        if (matcher.claimsLine) {
+          break;
+        }
         continue;
       }
 

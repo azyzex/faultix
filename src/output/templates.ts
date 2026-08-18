@@ -209,7 +209,7 @@ export function buildIncidentMarkdown(view: IncidentView): string {
     push(`| **Command** | \`${escapePipes(view.command.commandLine)}\` |`);
   }
   if (view.command?.exitCode !== undefined) {
-    push(`| **Exit code** | ${view.command.exitCode} |`);
+    push(`| **Exit code** | ${formatExitCode(view.command.exitCode)} |`);
   }
   if (view.command?.toolHint) {
     push(`| **Tool** | ${view.command.toolHint} |`);
@@ -336,7 +336,8 @@ export function buildRepairPrompt(view: IncidentView): string {
   push('## What failed', '');
   push(`${describeKind(view.kind)}.`);
   if (view.command?.commandLine) {
-    push(`Command: \`${view.command.commandLine}\`` + (view.command.exitCode !== undefined ? ` (exit ${view.command.exitCode})` : ''));
+    const exit = view.command.exitCode !== undefined ? ` (exit ${formatExitCode(view.command.exitCode)})` : '';
+    push(`Command: \`${view.command.commandLine}\`${exit}`);
   }
   const repeat = repeatNote(view.fingerprint.count);
   if (repeat) {
@@ -462,6 +463,17 @@ export function isSameError(a: ErrorView | undefined, b: ErrorView | undefined):
   // Deliberately ignores code and column: the same problem is sometimes
   // reported once with a diagnostic code and once without.
   return a.message === b.message && a.file === b.file && a.line === b.line;
+}
+
+/**
+ * Windows reports a negative exit status as its unsigned 32-bit form, so an
+ * errno of -4058 arrives as 4294963238. Show the number the tool meant.
+ */
+export function formatExitCode(code: number): string {
+  if (!Number.isInteger(code)) {
+    return String(code);
+  }
+  return String(code > 0x7fffffff ? code - 0x100000000 : code);
 }
 
 function escapePipes(s: string): string {

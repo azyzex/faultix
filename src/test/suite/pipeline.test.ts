@@ -169,6 +169,33 @@ suite('pipeline/ranking under ambient noise', () => {
   });
 });
 
+suite('pipeline/home paths never reach the brief', () => {
+  // npm prints absolute paths inside its messages, not only in the surrounding
+  // output, so anonymizing the excerpt alone left them in the error list.
+  const incident = runPipeline('npm-enoent.txt', 'npm run verify');
+
+  test('the summary carries no home directory', () => {
+    assert.ok(!incident.summary?.includes('C:\Users\dev'), incident.summary);
+    assert.ok(incident.summary?.includes('<home>'));
+  });
+
+  test('no parsed error carries a home directory', () => {
+    for (const error of incident.errors ?? []) {
+      assert.ok(!error.message.includes('C:\Users\dev'), `leaked in: ${error.message}`);
+    }
+  });
+
+  test('the rendered brief carries no home directory anywhere', () => {
+    const markdown = buildIncidentMarkdown(incident);
+    assert.ok(!markdown.includes('C:\Users\dev'), 'home path leaked into the brief');
+    assert.ok(!markdown.includes('/Users/dev'), 'posix home path leaked into the brief');
+  });
+
+  test('the agent prompt carries no home directory either', () => {
+    assert.ok(!buildRepairPrompt(incident).includes('C:\Users\dev'));
+  });
+});
+
 suite('pipeline/secret handling', () => {
   test('a token printed by a failing command never reaches the brief', () => {
     const raw = [
@@ -217,6 +244,7 @@ suite('pipeline/every fixture produces a usable brief', () => {
     'node-promise.txt': 'node node-js/unhandled_promise.js',
     'node-runtime.txt': 'node node-js/runtime_error.js',
     'node-syntax.txt': 'node node-js/broken_syntax.js',
+    'npm-enoent.txt': 'npm run verify',
     'npm-eresolve.txt': 'npm install',
     'powershell-parse.txt': 'pwsh shell/bad.ps1',
     'py-import.txt': 'python python/import_error.py',

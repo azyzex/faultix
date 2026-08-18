@@ -45,6 +45,7 @@ const EXPECTATIONS: Record<string, Expectation> = {
   'node-promise.txt': { messageIncludes: 'Boom: unhandled rejection', fileIncludes: 'unhandled_promise.js' },
   'node-runtime.txt': { messageIncludes: 'is not a function', fileIncludes: 'runtime_error.js' },
   'node-syntax.txt': { messageIncludes: 'missing ) after argument list', fileIncludes: 'broken_syntax.js', line: 4 },
+  'npm-enoent.txt': { messageIncludes: 'Could not read package.json' },
   'npm-eresolve.txt': { messageIncludes: 'unable to resolve dependency tree' },
   'powershell-parse.txt': { messageIncludes: 'missing the terminator', fileIncludes: 'bad.ps1', line: 6 },
   'py-import.txt': { messageIncludes: 'No module named', fileIncludes: 'import_error.py', line: 3 },
@@ -109,6 +110,36 @@ suite('errorExtract/coverage of the fixture corpus', () => {
     const covered = new Set(Object.keys(EXPECTATIONS));
     const uncovered = allFixtures().filter((f) => !covered.has(f));
     assert.deepStrictEqual(uncovered, []);
+  });
+});
+
+suite('errorExtract/npm', () => {
+  test('reads the npm 10 prefix as well as the old one', () => {
+    // npm changed `npm ERR!` to `npm error` in v10. Recognising only the old
+    // spelling meant every line fell through to the keyword fallback.
+    const modern = extractPrimaryError(clean('npm-enoent.txt'));
+    const legacy = extractPrimaryError(clean('npm-eresolve.txt'));
+    assert.strictEqual(modern?.matcher, 'npm');
+    assert.strictEqual(legacy?.matcher, 'npm');
+  });
+
+  test('keeps the sentence and drops the bookkeeping', () => {
+    const errors = dedupeErrors(extractErrors(clean('npm-enoent.txt')), 20);
+
+    assert.strictEqual(errors.length, 1, `expected one real problem, got: ${errors.map((e) => e.message).join(' / ')}`);
+    assert.ok(errors[0].message.startsWith('Could not read package.json'));
+  });
+
+  test('does not let rejected npm noise reach the keyword fallback', () => {
+    const errors = extractErrors(clean('npm-enoent.txt'));
+    assert.ok(!errors.some((e) => e.matcher === 'keyword'), 'npm lines must be claimed by the npm matcher');
+    assert.ok(!errors.some((e) => e.message.includes('syscall')));
+    assert.ok(!errors.some((e) => e.message.includes('A complete log')));
+  });
+
+  test('keeps an uppercase npm code, which is the information', () => {
+    const primary = extractPrimaryError(clean('npm-eresolve.txt'));
+    assert.ok(primary?.message.includes('ERESOLVE'));
   });
 });
 
