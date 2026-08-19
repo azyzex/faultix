@@ -5,6 +5,7 @@ import {
   extractErrors,
   extractFileRefs,
   extractPrimaryError,
+  groupErrors,
   normalizeMessage,
   rankErrors,
   summarizeFailure
@@ -299,5 +300,77 @@ suite('errorExtract/summarizeFailure', () => {
   test('bounds the summary length', () => {
     const long = `Error: ${'x'.repeat(1000)}`;
     assert.ok(summarizeFailure(long, 'f').length <= 201);
+  });
+});
+
+suite('errorExtract/groupErrors', () => {
+  function errorsFrom(text: string) {
+    return extractErrors(text);
+  }
+
+  test('groups by file, biggest pile first', () => {
+    const grouping = groupErrors(
+      errorsFrom(
+        [
+          "src/a.ts(1,1): error TS1: one",
+          "src/a.ts(2,1): error TS1: two",
+          "src/b.ts(1,1): error TS1: three"
+        ].join('\n')
+      )
+    );
+
+    assert.strictEqual(grouping.totalFiles, 2);
+    assert.strictEqual(grouping.clusters[0].file, 'src/a.ts');
+    assert.strictEqual(grouping.clusters[0].errors.length, 2);
+  });
+
+  test('notices when one code accounts for most of the output', () => {
+    const text = [
+      "src/a.ts(1,1): error TS2304: Cannot find name 'A'.",
+      "src/a.ts(2,1): error TS2304: Cannot find name 'B'.",
+      "src/b.ts(1,1): error TS2304: Cannot find name 'C'.",
+      "src/c.ts(1,1): error TS2307: Cannot find module './x'."
+    ].join('\n');
+
+    const grouping = groupErrors(errorsFrom(text));
+    assert.ok(grouping.dominantCode, 'expected a dominant code');
+    assert.strictEqual(grouping.dominantCode.code, 'TS2304');
+    assert.strictEqual(grouping.dominantCode.count, 3);
+  });
+
+  test('says nothing when no code dominates', () => {
+    const text = [
+      "src/a.ts(1,1): error TS1111: one",
+      "src/b.ts(1,1): error TS2222: two",
+      "src/c.ts(1,1): error TS3333: three",
+      "src/d.ts(1,1): error TS4444: four"
+    ].join('\n');
+
+    assert.strictEqual(groupErrors(errorsFrom(text)).dominantCode, undefined);
+  });
+
+  test('does not call two errors a pile', () => {
+    // Below the minimum there is nothing to explain, so the note would be noise.
+    const text = ["src/a.ts(1,1): error TS1: one", "src/a.ts(2,1): error TS1: two"].join('\n');
+    assert.strictEqual(groupErrors(errorsFrom(text)).dominantCode, undefined);
+  });
+
+  test('handles errors with no location', () => {
+    const grouping = groupErrors(errorsFrom('npm error something went badly wrong here'));
+    assert.strictEqual(grouping.totalFiles, 0);
+    assert.strictEqual(grouping.clusters[0].file, undefined);
+  });
+
+  test('handles an empty list', () => {
+    const grouping = groupErrors([]);
+    assert.strictEqual(grouping.totalErrors, 0);
+    assert.deepStrictEqual(grouping.clusters, []);
+    assert.strictEqual(grouping.dominantCode, undefined);
+  });
+
+  test('finds the shape of a real tsc run', () => {
+    const grouping = groupErrors(extractErrors(clean('tsc-type-errors.txt')));
+    assert.ok(grouping.totalFiles >= 2, 'errors span both files');
+    assert.ok(grouping.clusters[0].errors.length >= grouping.clusters[1].errors.length);
   });
 });

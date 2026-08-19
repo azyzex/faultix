@@ -852,3 +852,82 @@ export function summarizeFailure(text: string, fallback: string): string {
 function truncate(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, Math.max(0, max - 3))}...`;
 }
+
+// --- Clustering -------------------------------------------------------------
+
+export interface ErrorCluster {
+  /** File the errors belong to, or undefined for errors with no location. */
+  file?: string;
+  errors: ExtractedError[];
+}
+
+export interface ErrorGrouping {
+  clusters: ErrorCluster[];
+  totalErrors: number;
+  totalFiles: number;
+  /**
+   * Set when most errors share one diagnostic code, which usually means they
+   * are symptoms of a single cause rather than separate problems.
+   */
+  dominantCode?: {
+    code: string;
+    count: number;
+    /** Share of all errors, 0..1. */
+    share: number;
+  };
+}
+
+/** A code has to account for most of the output before it is worth calling out. */
+const DOMINANT_CODE_THRESHOLD = 0.6;
+
+/** Below this there is no pile to explain, so the note would be noise. */
+const DOMINANT_CODE_MINIMUM = 3;
+
+/**
+ * Groups errors by file and notices when one diagnostic code dominates.
+ *
+ * Forty TypeScript errors caused by one bad import are one problem with forty
+ * symptoms, and a brief that lists them flat invites an agent to fix them one
+ * at a time. Saying "38 of 40 share TS2304" points at the cause instead.
+ */
+export function groupErrors(errors: ExtractedError[]): ErrorGrouping {
+  const byFile = new Map<string, ExtractedError[]>();
+
+  for (const error of errors) {
+    const key = error.file ?? '';
+    const existing = byFile.get(key);
+    if (existing) {
+      existing.push(error);
+    } else {
+      byFile.set(key, [error]);
+    }
+  }
+
+  const clusters: ErrorCluster[] = [...byFile.entries()]
+    .map(([file, grouped]) => ({ file: file || undefined, errors: grouped }))
+    // Most errors first: the file with the biggest pile is where to start.
+    .sort((a, b) => b.errors.length - a.errors.length);
+
+  const counts = new Map<string, number>();
+  for (const error of errors) {
+    if (error.code) {
+      counts.set(error.code, (counts.get(error.code) ?? 0) + 1);
+    }
+  }
+
+  let dominantCode: ErrorGrouping['dominantCode'];
+  for (const [code, count] of counts) {
+    const share = count / errors.length;
+    if (count >= DOMINANT_CODE_MINIMUM && share >= DOMINANT_CODE_THRESHOLD) {
+      dominantCode = { code, count, share };
+      break;
+    }
+  }
+
+  return {
+    clusters,
+    totalErrors: errors.length,
+    totalFiles: clusters.filter((cluster) => cluster.file).length,
+    dominantCode
+  };
+}

@@ -18,6 +18,7 @@ import type { IncidentKind } from './classify';
 import {
   dedupeErrors,
   extractErrors,
+  groupErrors,
   extractFileRefs,
   extractPrimaryError,
   rankErrors,
@@ -34,7 +35,7 @@ import { readSnippets } from '../capture/snippets';
 import type { SnippetRequest } from '../capture/snippets';
 import type { Incident, IncidentTrigger } from '../core/models';
 import { summarizeError } from '../output/templates';
-import type { DiagnosticView, ErrorView } from '../output/templates';
+import type { DiagnosticView, ErrorView, IncidentView } from '../output/templates';
 
 /** The settings the pipeline actually reads. */
 export interface AnalysisOptions {
@@ -203,6 +204,7 @@ export function analyzeFailure(input: AnalyzeInput): Incident {
 
   const anonymize = options.anonymizePaths ? anonymizeHomePaths : (text: string): string => text;
   const primaryView = primary ? toErrorView(primary, resolver, workspaceRoot, anonymize) : undefined;
+  const errorViews = extracted.map((error) => toErrorView(error, resolver, workspaceRoot, anonymize));
   const fallbackTitle = input.titleOverride ?? deriveTitle(input);
   const rawSummary = primaryView
     ? summarizeError(primaryView)
@@ -232,7 +234,8 @@ export function analyzeFailure(input: AnalyzeInput): Incident {
       : undefined,
 
     primaryError: primaryView,
-    errors: extracted.map((error) => toErrorView(error, resolver, workspaceRoot, anonymize)),
+    errors: errorViews,
+    grouping: errorViews.length > 2 ? summarizeGrouping(extracted, errorViews) : undefined,
     terminalExcerpt: excerpt || undefined,
     snippets,
 
@@ -259,6 +262,29 @@ export function analyzeFailure(input: AnalyzeInput): Incident {
     fingerprint,
     history: input.history,
     redaction: redaction.total > 0 ? { total: redaction.total, counts: redaction.counts } : undefined
+  };
+}
+
+/**
+ * Describes the shape of the error list, using resolved display paths so the
+ * file count matches what the brief actually shows.
+ */
+function summarizeGrouping(extracted: ExtractedError[], views: ErrorView[]): IncidentView['grouping'] {
+  const grouping = groupErrors(extracted);
+
+  const byDisplayFile = new Map<string, number>();
+  for (const view of views) {
+    const key = view.file ?? '';
+    byDisplayFile.set(key, (byDisplayFile.get(key) ?? 0) + 1);
+  }
+
+  return {
+    totalErrors: grouping.totalErrors,
+    totalFiles: [...byDisplayFile.keys()].filter(Boolean).length,
+    dominantCode: grouping.dominantCode,
+    byFile: [...byDisplayFile.entries()]
+      .map(([file, count]) => ({ file: file || undefined, count }))
+      .sort((a, b) => b.count - a.count)
   };
 }
 

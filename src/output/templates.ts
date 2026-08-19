@@ -59,6 +59,14 @@ export interface CodeSnippet {
   truncated?: boolean;
 }
 
+/** How a pile of errors breaks down, so symptoms do not read as causes. */
+export interface ErrorGroupingView {
+  totalErrors: number;
+  totalFiles: number;
+  dominantCode?: { code: string; count: number; share: number };
+  byFile: Array<{ file?: string; count: number }>;
+}
+
 export interface IncidentView {
   id: string;
   createdAt: string;
@@ -79,6 +87,8 @@ export interface IncidentView {
 
   primaryError?: ErrorView;
   errors?: ErrorView[];
+  /** Set when there are enough errors that their shape is worth stating. */
+  grouping?: ErrorGroupingView;
   terminalExcerpt?: string;
   snippets?: CodeSnippet[];
 
@@ -342,7 +352,19 @@ export function buildIncidentMarkdown(view: IncidentView): string {
 
   const errors = view.errors ?? [];
   if (errors.length > 1) {
-    push(`## All parsed errors (${errors.length})`, '');
+    const grouping = view.grouping;
+    const heading =
+      grouping && grouping.totalFiles > 1
+        ? `## All parsed errors (${errors.length} across ${grouping.totalFiles} files)`
+        : `## All parsed errors (${errors.length})`;
+
+    push(heading, '');
+
+    const dominant = describeDominantCode(grouping);
+    if (dominant) {
+      push(`> ${dominant}`, '');
+    }
+
     for (const error of errors) {
       push(`- ${formatErrorLine(error)}`);
     }
@@ -508,6 +530,12 @@ export function buildRepairPrompt(view: IncidentView): string {
   const errors = (view.errors ?? []).filter((e) => !isSameError(e, view.primaryError));
   if (errors.length) {
     push(`## Other reported problems (${errors.length})`, '');
+
+    const dominant = describeDominantCode(view.grouping);
+    if (dominant) {
+      push('', dominant, '');
+    }
+
     for (const error of errors.slice(0, 15)) {
       push(`- ${formatErrorLine(error)}`);
     }
@@ -577,6 +605,30 @@ export function summarizeError(error: ErrorView, max = 200): string {
   const code = error.code && !error.message.startsWith(error.code) ? `${error.code}: ` : '';
   const summary = `${code}${oneLine(error.message)}${location}`;
   return summary.length <= max ? summary : `${summary.slice(0, Math.max(0, max - 3))}...`;
+}
+
+/**
+ * States when one diagnostic code accounts for most of the output.
+ *
+ * Forty errors from one bad import are one problem with forty symptoms, and a
+ * flat list invites fixing them one at a time.
+ */
+export function describeDominantCode(grouping: ErrorGroupingView | undefined): string | undefined {
+  // Guarding on the property narrows the container too, so `grouping` is known
+  // to be defined below without a second redundant check.
+  if (!grouping?.dominantCode) {
+    return undefined;
+  }
+  const dominant = grouping.dominantCode;
+
+  const rest = grouping.totalErrors - dominant.count;
+  const spread = grouping.totalFiles > 1 ? ` across ${grouping.totalFiles} files` : '';
+
+  return (
+    `${dominant.count} of ${grouping.totalErrors} errors are \`${dominant.code}\`${spread}` +
+    `${rest > 0 ? `, with ${rest} other${rest === 1 ? '' : 's'}` : ''}. ` +
+    'They are probably symptoms of one cause rather than separate problems - fix that first and re-run.'
+  );
 }
 
 /** Renders one error as a single markdown line. */
