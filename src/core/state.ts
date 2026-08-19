@@ -12,6 +12,7 @@ import { getConfig } from './config';
 import { coerceHistory, emptyHistory, toSummary } from './models';
 import type { HistoryFile, Incident, IncidentSummary } from './models';
 import { resolveWithinRoot } from '../analyze/paths';
+import { writeFileAtomically } from '../output/writer';
 
 const HISTORY_FILE = 'faultix-history.json';
 
@@ -205,7 +206,7 @@ export class FaultixState implements vscode.Disposable {
 
     try {
       await vscode.workspace.fs.createDirectory(this.context.storageUri);
-      await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(history, null, 2), 'utf8'));
+      await writeFileAtomically(uri, JSON.stringify(history, null, 2));
     } catch (error) {
       this.output.warn(`Could not persist Faultix history: ${error instanceof Error ? error.message : String(error)}`);
     }

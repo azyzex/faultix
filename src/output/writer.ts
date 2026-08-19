@@ -100,8 +100,31 @@ function archiveName(incident: Incident): string {
 
 async function writeFile(dir: vscode.Uri, name: string, contents: string, maxChars: number): Promise<string> {
   const uri = vscode.Uri.joinPath(dir, name);
-  await vscode.workspace.fs.writeFile(uri, Buffer.from(truncateChars(contents, maxChars), 'utf8'));
+  await writeFileAtomically(uri, truncateChars(contents, maxChars));
   return uri.fsPath;
+}
+
+/**
+ * Writes via a temporary file and a rename.
+ *
+ * A plain write is observable half-finished, and these files have readers: the
+ * MCP server, an agent, a person with the brief open. A truncated
+ * `incident.json` reads as "nothing captured" rather than as an error, which
+ * is the worst kind of wrong answer.
+ */
+export async function writeFileAtomically(uri: vscode.Uri, contents: string): Promise<void> {
+  const temporary = uri.with({ path: `${uri.path}.tmp` });
+  const bytes = Buffer.from(contents, 'utf8');
+
+  try {
+    await vscode.workspace.fs.writeFile(temporary, bytes);
+    await vscode.workspace.fs.rename(temporary, uri, { overwrite: true });
+  } catch (error) {
+    // If the rename is unavailable for any reason, a direct write is still
+    // better than no file at all.
+    await vscode.workspace.fs.writeFile(uri, bytes);
+    void error;
+  }
 }
 
 /**
@@ -117,7 +140,12 @@ async function pruneHistory(dir: vscode.Uri, keep: number, output: vscode.LogOut
       .sort()
       .reverse();
 
-    for (const stale of files.slice(keep)) {
+    // A crash mid-write can leave a temporary behind; it is never useful.
+    const orphans = entries
+      .filter(([name, type]) => type === vscode.FileType.File && name.endsWith('.tmp'))
+      .map(([name]) => name);
+
+    for (const stale of [...files.slice(keep), ...orphans]) {
       await vscode.workspace.fs.delete(vscode.Uri.joinPath(dir, stale), { useTrash: false });
     }
   } catch (error) {

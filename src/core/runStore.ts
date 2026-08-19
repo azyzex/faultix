@@ -17,6 +17,7 @@ import type { RunLedger, RunRecord } from '../analyze/runLedger';
 import type { GitEvidence } from '../analyze/git';
 import type { Incident } from './models';
 import { getConfig } from './config';
+import { writeFileAtomically } from '../output/writer';
 
 const LEDGER_FILE = 'runs.json';
 const FLUSH_DELAY_MS = 750;
@@ -161,7 +162,7 @@ export class RunStore implements vscode.Disposable {
       if (root) {
         await vscode.workspace.fs.createDirectory(root);
       }
-      await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(this.ledger, null, 2), 'utf8'));
+      await writeFileAtomically(uri, JSON.stringify(this.ledger, null, 2));
       this.dirty = false;
     } catch (error) {
       this.deps.output.warn(

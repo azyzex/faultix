@@ -243,10 +243,20 @@ suite('integration/capture is resilient', () => {
     }
   });
 
-  /** Reads the repeat count recorded for the most recent capture. */
-  function currentCount(): number {
-    const raw = fs.readFileSync(path.join(outputDir(), 'latest', 'incident.json'), 'utf8');
-    return (JSON.parse(raw) as { fingerprint: { count: number } }).fingerprint.count;
+  /**
+   * Reads the repeat count recorded for the most recent capture.
+   *
+   * Returns undefined rather than throwing when the file is missing or
+   * mid-write: a reader observing a partial file is a real condition, not a
+   * test failure.
+   */
+  function currentCount(): number | undefined {
+    try {
+      const raw = fs.readFileSync(path.join(outputDir(), 'latest', 'incident.json'), 'utf8');
+      return (JSON.parse(raw) as { fingerprint: { count: number } }).fingerprint.count;
+    } catch {
+      return undefined;
+    }
   }
 
   /**
@@ -260,7 +270,7 @@ suite('integration/capture is resilient', () => {
     let last = currentCount();
     let lastChangedAt = Date.now();
 
-    while (Date.now() - lastChangedAt < stableForMs) {
+    while (Date.now() - lastChangedAt < stableForMs || last === undefined) {
       await new Promise((resolve) => setTimeout(resolve, 150));
       const now = currentCount();
       if (now !== last) {
@@ -293,7 +303,7 @@ suite('integration/capture is resilient', () => {
     // three and checking at the end races the writer.
     for (let i = 1; i <= captures; i++) {
       await vscode.commands.executeCommand('faultix.createRepairBrief');
-      await waitFor(() => currentCount() >= before + i);
+      await waitFor(() => (currentCount() ?? -1) >= before + i);
     }
 
     const after = await waitForQuiet();

@@ -48,6 +48,11 @@ session cold and only sees the run it just performed.
   but the run ledger was being written anyway. It now honours the mode, at the
   cost of the history features — which is the trade that setting asks for.
 - The agent prompt printed a "Context" heading with nothing beneath it.
+- JSON artifacts were written non-atomically, so a reader could observe a
+  truncated file. `incident.json` half-written parses as nothing captured
+  rather than as an error, which is the worst kind of wrong answer — and the
+  MCP server is exactly such a reader. All JSON is now written via a temporary
+  file and a rename, and a temporary left behind by a crash is cleaned up.
 
 ### Internal
 
