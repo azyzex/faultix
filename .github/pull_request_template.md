@@ -8,7 +8,7 @@
 
 ## Checklist
 
-- [ ] `npm run verify` passes (lint, typecheck, 534+ tests)
+- [ ] `npm run verify` passes (lint, typecheck, 553+ tests)
 - [ ] New behaviour has tests; new toolchain support has a recorded fixture
 - [ ] No new runtime dependencies
 - [ ] No network calls added

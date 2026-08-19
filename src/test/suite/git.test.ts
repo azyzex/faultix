@@ -193,8 +193,9 @@ suite('git/collectGitEvidence', function () {
 
     const evidence = await collectGitEvidence({ enabled: true, workspaceRoot: repo, sinceSha: firstSha });
 
-    assert.deepStrictEqual(evidence.changesSince?.files, ['a.txt']);
-    assert.strictEqual(evidence.changesSince?.commits, 0, 'no commits landed');
+    assert.ok(evidence.changesSince, 'expected a diff');
+    assert.deepStrictEqual(evidence.changesSince.files, ['a.txt']);
+    assert.strictEqual(evidence.changesSince.commits, 0, 'no commits landed');
   });
 
   test('reports nothing when the tree matches the commit asked about', async () => {
