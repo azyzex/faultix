@@ -5,6 +5,21 @@ All notable changes to Faultix are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-08-19
+
+### Fixed
+
+- **JSON was written non-atomically.** A reader could observe a truncated
+  `incident.json`, which parses as "nothing captured" rather than as an error
+  — the worst kind of wrong answer, and the MCP server is exactly such a
+  reader. Briefs, the archive and both ledgers now write to a temporary file
+  and rename over the target, with a direct write as a fallback. A temporary
+  left behind by a crash is cleaned up during pruning.
+- **`output.mode: clipboardOnly` was writing the run ledger.** That mode
+  promises nothing is written to the workspace, and the ledger is a workspace
+  file like any other. It now honours the mode, at the cost of the history
+  features — which is the trade the setting asks for.
+
 ## [0.3.0] - 2026-08-19
 
 Faultix stops being a formatter and starts being a memory.
@@ -44,15 +59,7 @@ session cold and only sees the run it just performed.
 
 ### Fixed
 
-- `output.mode: clipboardOnly` promises nothing is written to the workspace,
-  but the run ledger was being written anyway. It now honours the mode, at the
-  cost of the history features — which is the trade that setting asks for.
 - The agent prompt printed a "Context" heading with nothing beneath it.
-- JSON artifacts were written non-atomically, so a reader could observe a
-  truncated file. `incident.json` half-written parses as nothing captured
-  rather than as an error, which is the worst kind of wrong answer — and the
-  MCP server is exactly such a reader. All JSON is now written via a temporary
-  file and a rename, and a temporary left behind by a crash is cleaned up.
 
 ### Internal
 
@@ -239,6 +246,7 @@ control-code garbage.
 Initial working version: terminal, task and diagnostics capture; suspect
 ranking; fingerprinting; markdown and prompt output; tree view.
 
+[0.3.1]: https://github.com/azyzex/faultix/releases/tag/v0.3.1
 [0.3.0]: https://github.com/azyzex/faultix/releases/tag/v0.3.0
 [0.2.3]: https://github.com/azyzex/faultix/releases/tag/v0.2.3
 [0.2.2]: https://github.com/azyzex/faultix/releases/tag/v0.2.2

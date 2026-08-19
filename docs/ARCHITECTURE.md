@@ -25,7 +25,7 @@ the MCP server. None of them re-implements it.
 Everything above the line runs under plain mocha in about 300ms. Everything
 below it needs an Extension Host and takes about 8 seconds. That ratio is why
 the split is worth enforcing: it is what makes it cheap enough to test the
-interesting logic thoroughly, and it is why 421 of the 437 tests never launch
+interesting logic thoroughly, and it is why 522 of the 539 tests never launch
 an editor.
 
 The practical consequence is that logic should keep moving *up*. When a piece
@@ -171,9 +171,9 @@ with a fixed argument array, a 1.5 second timeout and a 1 MB output cap.
 
 | Suite | Count | Runtime | What it proves |
 |---|---|---|---|
-| Unit | 421 | ~0.3s | Every pure module, fixture-driven |
+| Unit | 522 | ~0.3s | Every pure module, fixture-driven |
 | Pipeline | included above | | A brief renders for all 23 recorded failures |
-| Extension Host | 16 | ~8s | Activation, commands, settings, real file writes |
+| Extension Host | 17 | ~8s | Activation, commands, settings, real file writes |
 
 The pipeline suite is the one that catches integration regressions: it wires
 the same stages `buildIncident` does and asserts on the finished markdown, so a

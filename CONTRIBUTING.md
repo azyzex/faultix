@@ -7,8 +7,8 @@ what a change is expected to come with.
 
 ```bash
 npm install
-npm run verify            # lint + typecheck + 421 unit tests
-npm run test:integration  # 16 tests inside a real Extension Host
+npm run verify            # lint + typecheck + 522 unit tests
+npm run test:integration  # 17 tests inside a real Extension Host
 ```
 
 Press `F5` in VS Code to launch an Extension Development Host. Point it at a

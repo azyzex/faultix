@@ -16,6 +16,7 @@
  *   claude mcp add faultix -- node /path/to/faultix/out/mcp/server.js /path/to/project
  */
 
+import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
 import { handleMessage, parseMessage, errorResponse, ErrorCode } from './protocol';
@@ -23,7 +24,22 @@ import type { JsonRpcResponse, ServerInfo } from './protocol';
 import { createToolRegistry } from './tools';
 import { FaultixStore } from './store';
 
-const SERVER_INFO: ServerInfo = { name: 'faultix', version: '0.3.0' };
+/**
+ * Read from the manifest rather than hardcoded: this sits two directories
+ * below the package root both in the repository and inside the installed
+ * extension, and a version that has to be updated by hand drifts.
+ */
+function readVersion(): string {
+  try {
+    const manifest = path.resolve(__dirname, '..', '..', 'package.json');
+    const parsed = JSON.parse(fs.readFileSync(manifest, 'utf8')) as { version?: unknown };
+    return typeof parsed.version === 'string' ? parsed.version : '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+
+const SERVER_INFO: ServerInfo = { name: 'faultix', version: readVersion() };
 
 interface Args {
   root: string;
