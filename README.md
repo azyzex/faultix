@@ -276,7 +276,7 @@ npm run brief -- --json "cargo build"    # every matcher that fired
 
 ```bash
 npm install
-npm run verify           # lint, typecheck, and 522 unit tests
+npm run verify           # lint, typecheck, and 534 unit tests
 npm run test:integration # 17 tests in a real VS Code Extension Host
 npm run test:coverage   # coverage report
 npm run package         # build faultix.vsix

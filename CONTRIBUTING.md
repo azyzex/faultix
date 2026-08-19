@@ -7,7 +7,7 @@ what a change is expected to come with.
 
 ```bash
 npm install
-npm run verify            # lint + typecheck + 522 unit tests
+npm run verify            # lint + typecheck + 534 unit tests
 npm run test:integration  # 17 tests inside a real Extension Host
 ```
 

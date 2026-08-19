@@ -5,6 +5,24 @@ All notable changes to Faultix are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-19
+
+### Added
+
+- **What changed since it last passed.** The ledger already recorded the commit
+  of the last passing run; nothing used it. Briefs now list the files that
+  differ from that commit, and the agent prompt says plainly that the cause is
+  very likely among them. It is the first question anyone asks when something
+  that used to work stops, and it is pure bookkeeping to answer. Degrades
+  quietly when the commit cannot be resolved, since a branch that has been
+  rebased away is normal rather than an error.
+- **Error grouping.** Briefs state how many files the errors span, and call it
+  out when one diagnostic code accounts for most of them: *"4 of 5 errors are
+  TS2304 across 3 files ... probably symptoms of one cause rather than separate
+  problems"*. A flat list of forty errors from one bad import invites fixing
+  them one at a time. The threshold is 60% of the output and at least three
+  errors, because below that there is no pile to explain.
+
 ## [0.3.1] - 2026-08-19
 
 ### Fixed
@@ -246,6 +264,7 @@ control-code garbage.
 Initial working version: terminal, task and diagnostics capture; suspect
 ranking; fingerprinting; markdown and prompt output; tree view.
 
+[0.4.0]: https://github.com/azyzex/faultix/releases/tag/v0.4.0
 [0.3.1]: https://github.com/azyzex/faultix/releases/tag/v0.3.1
 [0.3.0]: https://github.com/azyzex/faultix/releases/tag/v0.3.0
 [0.2.3]: https://github.com/azyzex/faultix/releases/tag/v0.2.3

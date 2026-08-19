@@ -25,7 +25,7 @@ the MCP server. None of them re-implements it.
 Everything above the line runs under plain mocha in about 300ms. Everything
 below it needs an Extension Host and takes about 8 seconds. That ratio is why
 the split is worth enforcing: it is what makes it cheap enough to test the
-interesting logic thoroughly, and it is why 522 of the 539 tests never launch
+interesting logic thoroughly, and it is why 534 of the 551 tests never launch
 an editor.
 
 The practical consequence is that logic should keep moving *up*. When a piece
@@ -171,7 +171,7 @@ with a fixed argument array, a 1.5 second timeout and a 1 MB output cap.
 
 | Suite | Count | Runtime | What it proves |
 |---|---|---|---|
-| Unit | 522 | ~0.3s | Every pure module, fixture-driven |
+| Unit | 534 | ~0.3s | Every pure module, fixture-driven |
 | Pipeline | included above | | A brief renders for all 23 recorded failures |
 | Extension Host | 17 | ~8s | Activation, commands, settings, real file writes |
 

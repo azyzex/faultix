@@ -117,7 +117,7 @@ shapes.
 ## 4. Automated
 
 ```bash
-npm run verify            # lint, typecheck, 522 unit tests (~1s)
+npm run verify            # lint, typecheck, 534 unit tests (~1s)
 npm run test:integration  # 17 tests in a real Extension Host (~10s)
 npm run test:coverage     # enforces 90% statements on the analysis core
 ```
