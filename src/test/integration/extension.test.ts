@@ -289,6 +289,14 @@ suite('integration/capture is resilient', () => {
     await config.update('output.mode', undefined, vscode.ConfigurationTarget.Workspace);
     await config.update('output.dir', undefined, vscode.ConfigurationTarget.Workspace);
 
+    // This test measures a counter the whole extension shares, and the
+    // autonomous triggers can bump it at any moment — a diagnostics spike from
+    // a language server settling is enough. Silence them for the duration so
+    // the only captures are the ones this test performs.
+    await config.update('capture.autoOnDiagnosticsSpike', false, vscode.ConfigurationTarget.Workspace);
+    await config.update('capture.autoOnNonZeroExit', false, vscode.ConfigurationTarget.Workspace);
+    await config.update('capture.autoOnTaskFailure', false, vscode.ConfigurationTarget.Workspace);
+
     await vscode.commands.executeCommand('faultix.createRepairBrief');
     await waitFor(() => fs.existsSync(path.join(outputDir(), 'latest', 'incident.json')));
 
@@ -307,6 +315,11 @@ suite('integration/capture is resilient', () => {
     }
 
     const after = await waitForQuiet();
+
+    await config.update('capture.autoOnDiagnosticsSpike', undefined, vscode.ConfigurationTarget.Workspace);
+    await config.update('capture.autoOnNonZeroExit', undefined, vscode.ConfigurationTarget.Workspace);
+    await config.update('capture.autoOnTaskFailure', undefined, vscode.ConfigurationTarget.Workspace);
+
     assert.strictEqual(
       after,
       before + captures,
