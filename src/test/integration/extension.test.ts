@@ -22,7 +22,9 @@ const EXPECTED_COMMANDS = [
   'faultix.markLatestResolved',
   'faultix.openOutputFolder',
   'faultix.clearHistory',
-  'faultix.togglePause'
+  'faultix.togglePause',
+  'faultix.copyMcpConfig',
+  'faultix.showFlakyCommands'
 ];
 
 function workspaceRoot(): string {
@@ -190,7 +192,24 @@ suite('integration/settings are honoured', () => {
     );
   });
 
-  test('clipboardOnly mode writes nothing to disk', async function () {
+  test('the run ledger is written alongside the briefs', async function () {
+    this.timeout(30000);
+
+    const config = vscode.workspace.getConfiguration('faultix');
+    await config.update('output.dir', undefined, vscode.ConfigurationTarget.Workspace);
+    await config.update('output.mode', undefined, vscode.ConfigurationTarget.Workspace);
+
+    await vscode.commands.executeCommand('faultix.createRepairBrief');
+
+    const ledgerPath = path.join(outputDir(), 'runs.json');
+    await waitFor(() => fs.existsSync(ledgerPath) && fs.statSync(ledgerPath).size > 0);
+
+    const ledger = JSON.parse(fs.readFileSync(ledgerPath, 'utf8')) as { version: number; runs: unknown[] };
+    assert.strictEqual(ledger.version, 1);
+    assert.ok(Array.isArray(ledger.runs));
+  });
+
+  test('clipboardOnly mode writes nothing to disk, ledger included', async function () {
     this.timeout(30000);
 
     await config().update('output.dir', '.ai-repair-clipboard', vscode.ConfigurationTarget.Workspace);
@@ -200,9 +219,14 @@ suite('integration/settings are honoured', () => {
     fs.rmSync(target, { recursive: true, force: true });
 
     await vscode.commands.executeCommand('faultix.createRepairBrief');
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 2500));
 
     assert.strictEqual(fs.existsSync(target), false, 'clipboardOnly must not write files');
+    assert.strictEqual(
+      fs.existsSync(path.join(target, 'runs.json')),
+      false,
+      'the run ledger is a workspace file too, and the mode says not to write one'
+    );
   });
 });
 

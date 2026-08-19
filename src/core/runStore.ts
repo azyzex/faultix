@@ -144,6 +144,13 @@ export class RunStore implements vscode.Disposable {
       return;
     }
 
+    // clipboardOnly means "do not write to my workspace", and the ledger is a
+    // file in the workspace like any other. Honouring the mode costs the
+    // history features, which is the trade the setting asks for.
+    if (getConfig().outputMode === 'clipboardOnly') {
+      return;
+    }
+
     const uri = this.ledgerUri;
     if (!uri) {
       return;

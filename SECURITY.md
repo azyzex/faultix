@@ -70,6 +70,34 @@ parse. Every parsing stage is bounded:
 
 The test suite asserts these stay bounded on pathological input.
 
+## The run ledger
+
+Recording successful runs (`faultix.history.recordRuns`, on by default) writes
+`.ai-repair/runs.json`, containing for each tracked command: the command line,
+whether it passed, the commit, whether the tree was dirty, and the
+repository-relative paths that were modified. Failing runs also carry the
+failure fingerprint and its one-line summary.
+
+Two consequences worth stating plainly:
+
+- **It is a record of your recent work.** Add `.ai-repair/` to `.gitignore`
+  unless you intend to share it. Summaries are redacted and home paths
+  anonymized like everything else, but the file names files you were editing.
+- **`clipboardOnly` suppresses it.** That mode means "do not write to my
+  workspace", and the ledger is a workspace file like any other. Turning it on
+  disables run history, fix correlation and the MCP history tools; that is the
+  trade the setting asks for.
+
+## The MCP server
+
+`faultix-mcp` exposes the contents of `.ai-repair/` to whatever agent you
+connect it to. It is read-only by construction: it opens files, runs no
+commands, modifies nothing and makes no network calls.
+
+Connecting it means an agent — and therefore, usually, a model provider — can
+read your failure history. That is the point of it, but it is a decision worth
+making deliberately, and it is off until you configure it.
+
 ## What Faultix does not do
 
 - **No network calls.** Nothing is uploaded, and there is no telemetry. The

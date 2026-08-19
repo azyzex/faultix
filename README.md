@@ -1,16 +1,20 @@
 # Faultix
 
-**Turn a failing command into a brief an AI agent can actually fix.**
+**Remembers every failure in your project, and what fixed it — and lets your
+coding agent ask.**
 
 [![CI](https://github.com/azyzex/faultix/actions/workflows/ci.yml/badge.svg)](https://github.com/azyzex/faultix/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.93-007ACC.svg)](https://code.visualstudio.com/)
 
-When a build breaks, the usual move is to scroll the terminal, select a few
-hundred lines, and paste them into a chat window along with a guess about what
-matters. Faultix does that step for you, properly: it watches for failures,
-works out the root cause, pulls in the code around it, strips the secrets, and
-writes a brief you can hand straight to an agent.
+When a build breaks, Faultix works out the root cause, pulls in the code around
+it, strips the secrets, and writes a brief you can hand straight to an agent.
+
+It also records the runs that *succeed*, which is what makes the useful part
+possible: it knows this failure has happened six times, that you fixed it last
+Tuesday by editing one file, and that this test disagrees with itself at the
+same commit. An agent starts every session cold and cannot know any of that —
+so Faultix exposes it over the Model Context Protocol, and the agent asks.
 
 Everything happens locally. There are no network calls and no telemetry.
 
@@ -61,6 +65,60 @@ Alongside it, `repair.prompt.md` says the same thing in the order an agent
 wants it: conclusion, evidence, code, then an explicit task with instructions
 not to paper over the error.
 
+## For agents
+
+```bash
+claude mcp add faultix -- node /path/to/faultix/out/mcp/server.js /path/to/project
+```
+
+Then your agent can ask:
+
+| Tool | Answers |
+|---|---|
+| `faultix_latest_failure` | What just broke? |
+| `faultix_search_failures` | Has this happened before? |
+| `faultix_failure_history` | Was it fixed, and by changing what? |
+| `faultix_flaky_commands` | Which commands disagree with themselves? |
+| `faultix_command_stats` | Pass rates, and when each last worked. |
+| `faultix_recent_failures` | What has been going wrong lately? |
+
+The server is read-only and ships with the extension. **Faultix: Copy MCP
+Server Config** puts a ready-to-paste config on your clipboard. See
+[docs/MCP.md](docs/MCP.md).
+
+## What it remembers
+
+Because successes are recorded too, a brief can say things no single run
+reveals:
+
+```markdown
+## What history says
+
+- **Fixed before:** this failure went away on 2026-08-19 after changes to
+  `src/db/pool.ts`, `src/db/schema.sql`.
+- **Last passed:** 2026-08-19 at `bbb222`.
+- **Pass rate:** 33% of 3 recorded runs.
+```
+
+And the agent prompt leads with it:
+
+```markdown
+## You have fixed this before
+
+The same failure was resolved on 2026-08-19, after 2 attempts.
+
+Files being edited when it went away:
+- `src/db/pool.ts`
+
+Start there. It is a strong hint, not a certainty.
+```
+
+**Flaky detection** falls out of the same data. When a command passed *and*
+failed at the same commit with a clean working tree, the code provably did not
+change between those runs — so the failure is flakiness, a race or an unstable
+environment, not a fault to fix in the logic. Faultix says so rather than
+letting you or your agent burn an hour on it.
+
 ## How it works
 
 ```
@@ -86,6 +144,9 @@ failing command
       |
       v
   fingerprint   recognise this failure if it happens again
+      |
+      v
+   history      has this happened before? was it fixed? by changing what?
       |
       v
    render       incident.md, repair.prompt.md, incident.json
@@ -133,6 +194,7 @@ Files land in `.ai-repair/` in your workspace:
     repair.prompt.md     paste into an agent
     incident.json        machine-readable
   history/               archived incidents, pruned automatically
+  runs.json              the run ledger: what passed, what failed, when
 ```
 
 Add `.ai-repair/` to your `.gitignore`, or set
@@ -150,7 +212,9 @@ written at all.
 | `Faultix: Re-run Failing Command` | Re-run the command that failed |
 | `Faultix: Mark Latest Incident Resolved` | Clear the status bar indicator |
 | `Faultix: Reveal Output Folder` | Open `.ai-repair/` in the OS file manager |
-| `Faultix: Clear History` | Reset the archive and repeat counts |
+| `Faultix: Show Flaky Commands` | List commands that disagree with themselves |
+| `Faultix: Copy MCP Server Config` | Connect an agent to this workspace's history |
+| `Faultix: Clear History` | Reset the archive, run ledger and repeat counts |
 | `Faultix: Pause or Resume Automatic Capture` | Stop capturing for this session |
 
 ### Settings
@@ -168,6 +232,8 @@ All settings live under `faultix.*`. The ones worth knowing:
 | `output.keepHistory` | `50` | Archived incidents to retain |
 | `output.maxSnippets` | `3` | Inline code snippets per brief |
 | `output.snippetContextLines` | `6` | Lines of context either side of a failure |
+| `history.recordRuns` | `true` | Record successful runs too, enabling fix correlation and flaky detection |
+| `history.maxRuns` | `500` | How many runs to remember |
 | `privacy.redactSecrets` | `true` | Scrub credentials before writing anything |
 | `privacy.anonymizeHomePaths` | `true` | Replace your home directory with `<home>` |
 | `git.enabled` | `true` | Include branch, dirty state and changed files |
@@ -223,7 +289,8 @@ adding a fixture and an expectation, not writing a mock.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow,
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pipeline fits
-together, and [docs/TESTING.md](docs/TESTING.md) for how to exercise it.
+together, [docs/TESTING.md](docs/TESTING.md) for how to exercise it, and
+[docs/MCP.md](docs/MCP.md) for the agent integration.
 
 ## License
 

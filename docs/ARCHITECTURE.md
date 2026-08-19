@@ -6,15 +6,21 @@
 
 ```
 src/analyze/   pure    ANSI sanitizing, classification, error extraction,
-src/privacy/   pure    path safety, suspect ranking, fingerprinting, redaction
-src/output/    pure    brief and prompt rendering
+src/privacy/   pure    path safety, ranking, fingerprinting, the run ledger,
+src/output/    pure    redaction, brief and prompt rendering
                        |
                        | consumed by
                        v
 src/capture/   adapter event plumbing and incident assembly
 src/core/      adapter settings, state, persistence
 src/ui/        adapter the side panel
+src/mcp/       adapter the MCP server (filesystem only, no vscode)
+src/tools/     adapter the faultix-brief CLI (no vscode)
 ```
+
+Note what that last pair implies: because the core has no `vscode` import,
+three separate front ends run the *same* analysis — the extension, the CLI and
+the MCP server. None of them re-implements it.
 
 Everything above the line runs under plain mocha in about 300ms. Everything
 below it needs an Extension Host and takes about 8 seconds. That ratio is why
@@ -46,7 +52,29 @@ depends on the one before it, and two of the orderings are load-bearing.
 | 6 | rank | `analyze/scoring.ts` | Suspect files, weighted by evidence quality |
 | 7 | context | `capture/snippets.ts` | Read the code around each location |
 | 8 | fingerprint | `analyze/fingerprint.ts` | Recognise the failure across runs |
-| 9 | render | `output/templates.ts` | Home-path anonymization happens *here* |
+| 9 | history | `analyze/runLedger.ts` | Has this happened before? Was it fixed? |
+| 10 | render | `output/templates.ts` | Home-path anonymization happens *here* |
+
+## The run ledger
+
+`analyze/runLedger.ts` records every tracked command, passing or failing, in
+`.ai-repair/runs.json`. Recording only failures was the original design, and it
+made three questions unanswerable:
+
+- **Was it fixed, and by what?** A failure followed by a pass of the same
+  command is a resolution. The files reported are those being edited across
+  both runs — the overlap when there is one, the union otherwise. It is a
+  heuristic, documented as one, and it flags when commits landed too.
+- **Is this flaky?** A pass and a failure at the same commit with a clean tree
+  means the code did not change, so the fault is not in the logic. A dirty tree
+  gets the same finding at lower confidence, because an edit explains it — and
+  when a fix was recorded for that command, the low-confidence signal is
+  suppressed entirely rather than contradicting it.
+- **What changed since it last passed?** The commit of the last passing run.
+
+Successful runs are filtered by the capture classifier: if it can name what
+kind of work a command is, the run is worth keeping. That is what stops every
+`cd` and `ls` from burying the builds.
 
 ### Two orderings that matter
 
