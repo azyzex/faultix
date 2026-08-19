@@ -436,20 +436,20 @@
         <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
           <path fill="currentColor" d="M13.6 2.2 6.8 12.4a.55.55 0 0 0 .46.86h3.02l-1.9 8.06a.36.36 0 0 0 .65.28l6.8-10.2a.55.55 0 0 0-.46-.86h-3.02l1.9-8.06a.36.36 0 0 0-.65-.28z"/>
         </svg>
-        <span>Faultix &mdash; v0.2.1</span>
+        <span>Faultix &mdash; v0.3.1</span>
       </div>
 
-      <h1>Your build broke.<br>Here is the brief.</h1>
+      <h1>Your build broke.<br>Again.</h1>
 
       <p class="hero-sub">
-        A local-first VS&nbsp;Code extension that watches for failing commands,
-        works out the root cause, and writes a brief you can hand straight to a
-        coding agent. No network calls, no telemetry.
+        A local-first VS&nbsp;Code extension that remembers every failure in a
+        project &mdash; and what fixed it. It answers the questions a coding
+        agent cannot, because an agent starts every session knowing nothing.
       </p>
 
       <div class="actions">
         <a class="btn btn-primary" href="https://github.com/azyzex/faultix">View the repository</a>
-        <a class="btn" href="https://github.com/azyzex/faultix/releases/tag/v0.2.1">Download v0.2.1</a>
+        <a class="btn" href="https://github.com/azyzex/faultix/releases/tag/v0.3.1">Download v0.3.1</a>
       </div>
     </header>
 
@@ -516,10 +516,128 @@ progress: 10%<span class="esc">\r</span>progress: 55%<span class="esc">\r</span>
       </div>
     </section>
 
+
+    <section>
+      <div class="section-head">
+        <span class="eyebrow">Memory</span>
+        <h2>What an agent cannot know</h2>
+      </div>
+
+      <p class="lead">
+        An agent that runs your commands already sees their output. Formatting
+        a failure for it adds little. What it cannot see is anything outside the
+        run it just performed &mdash; and that is where the useful information
+        lives.
+      </p>
+
+      <div class="compare">
+        <div class="panel">
+          <div class="panel-head">
+            <span>what the agent sees</span>
+            <span class="tag tag-bad">one run</span>
+          </div>
+<pre><code><span class="err">ECONNREFUSED</span>: could not connect
+to postgres
+
+<span class="dim">at src/db/pool.ts:31</span>
+
+<span class="dim">(nothing else &mdash; this session
+started thirty seconds ago)</span></code></pre>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <span>what Faultix adds</span>
+            <span class="tag tag-good">every run</span>
+          </div>
+<pre><code><span class="acc">## You have fixed this before</span>
+
+The same failure was resolved
+7 hours ago, after 2 attempts.
+
+Files being edited when it
+went away:
+<span class="ok">- src/db/pool.ts</span>
+
+Start there. It is a strong
+hint, not a certainty.</code></pre>
+        </div>
+      </div>
+
+      <p style="margin-top:1.5rem">
+        This falls out of one design decision: record the runs that
+        <em>succeed</em>, not only the ones that fail. A failure followed by a
+        pass of the same command is a resolution, and the files being edited
+        across both runs are usually the fix.
+      </p>
+
+      <div class="cards">
+        <div class="card">
+          <h3>Flakiness, for free</h3>
+          <p>
+            The same data answers a different question. When a command passed
+            <em>and</em> failed at the same commit with a clean working tree,
+            the code provably did not change between those runs &mdash; so the
+            failure is a race, a flaky test or an unstable environment, not a
+            fault to fix in the logic. Faultix says so before an hour goes into
+            chasing it.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Honest about the guess</h3>
+          <p>
+            Fix correlation is a heuristic: the overlap between the failing and
+            passing working trees, falling back to their union. It points at
+            the right file far more often than not, but it cannot know which
+            edit mattered &mdash; and every answer built on it says exactly
+            that, rather than presenting a guess as a finding.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <span class="eyebrow">Interface</span>
+        <h2>The agent asks; nobody pastes</h2>
+      </div>
+
+      <p>
+        All of it is exposed over the Model Context Protocol, so Claude Code,
+        Cursor or anything else that speaks MCP can query the history directly.
+        The server is read-only by construction: it opens the files the
+        extension wrote, runs nothing, and makes no network calls.
+      </p>
+
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Tool</th><th>Answers</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>faultix_latest_failure</td><td>What just broke?</td></tr>
+            <tr><td>faultix_search_failures</td><td>Has this happened before?</td></tr>
+            <tr><td>faultix_failure_history</td><td>Was it fixed, and by changing what?</td></tr>
+            <tr><td>faultix_flaky_commands</td><td>Which commands disagree with themselves?</td></tr>
+            <tr><td>faultix_command_stats</td><td>Pass rates, and when each last worked</td></tr>
+            <tr><td>faultix_recent_failures</td><td>What has been going wrong lately?</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p style="margin-top:1.4rem">
+        The protocol is implemented directly rather than through the SDK.
+        MCP is JSON-RPC&nbsp;2.0 over stdio with four methods that matter, and
+        pulling a package tree into someone&rsquo;s editor to serve six
+        read-only queries would break the project&rsquo;s
+        zero-runtime-dependency rule for no benefit.
+      </p>
+    </section>
+
     <section>
       <div class="section-head">
         <span class="eyebrow">Method</span>
-        <h2>Eight stages, in order</h2>
+        <h2>Nine stages, in order</h2>
       </div>
 
       <p>
@@ -578,7 +696,19 @@ progress: 10%<span class="esc">\r</span>progress: 55%<span class="esc">\r</span>
             <div class="stage-desc">Hash the normalized command and primary error, so the same failure is recognised across runs and a brief can say &ldquo;seen six times&rdquo;.</div>
           </div>
         </li>
+        <li>
+          <div>
+            <span class="stage-name">history</span>
+            <div class="stage-desc">Ask the run ledger what it knows: has this happened before, was it ever fixed, what was being edited when it went away, and does this command disagree with itself.</div>
+          </div>
+        </li>
       </ol>
+
+      <p style="margin-top:1.4rem">
+        Because the core imports no VS&nbsp;Code APIs, three separate front ends
+        run this same pipeline: the extension, a command-line tool, and the MCP
+        server. None of them re-implements it.
+      </p>
     </section>
 
     <section>
@@ -645,9 +775,9 @@ progress: 10%<span class="esc">\r</span>progress: 55%<span class="esc">\r</span>
       </p>
 
       <div class="stats">
-        <div class="stat"><span class="stat-value">416</span><span class="stat-label">unit tests</span></div>
-        <div class="stat"><span class="stat-value">16</span><span class="stat-label">Extension&nbsp;Host tests</span></div>
-        <div class="stat"><span class="stat-value">93.6%</span><span class="stat-label">statement coverage of the core</span></div>
+        <div class="stat"><span class="stat-value">522</span><span class="stat-label">unit tests</span></div>
+        <div class="stat"><span class="stat-value">17</span><span class="stat-label">Extension&nbsp;Host tests</span></div>
+        <div class="stat"><span class="stat-value">0</span><span class="stat-label">network calls, ever</span></div>
         <div class="stat"><span class="stat-value">23</span><span class="stat-label">recorded fixtures</span></div>
         <div class="stat"><span class="stat-value">0</span><span class="stat-label">runtime dependencies</span></div>
         <div class="stat"><span class="stat-value">0</span><span class="stat-label">npm audit advisories</span></div>
@@ -711,6 +841,14 @@ progress: 10%<span class="esc">\r</span>progress: 55%<span class="esc">\r</span>
           <span class="bullet">&#9642;</span>
           <span><code>engines.vscode</code> claimed <code>^1.88</code> while the extension depends on an API finalized in&nbsp;1.93, because <code>@types/vscode</code> was allowed to float twenty minors past the declared floor.</span>
         </li>
+        <li>
+          <span class="bullet">&#9642;</span>
+          <span>npm renamed its output prefix from <code>npm ERR!</code> to <code>npm error</code> in&nbsp;v10, so a failed <code>npm run</code> produced eight useless &ldquo;errors&rdquo; instead of the one sentence that explained it. Found by running the extension against a real machine, which no fixture could have caught.</span>
+        </li>
+        <li>
+          <span class="bullet">&#9642;</span>
+          <span>JSON was written non-atomically, so a reader could observe a truncated <code>incident.json</code> &mdash; which parses as &ldquo;nothing captured&rdquo; rather than as an error. CI caught it; the fix was a temp-file-and-rename, not a more patient test.</span>
+        </li>
       </ul>
     </section>
 
@@ -760,7 +898,7 @@ progress: 10%<span class="esc">\r</span>progress: 55%<span class="esc">\r</span>
 
     <footer>
       <p>
-        Faultix v0.2.1 &mdash; MIT licensed. Built with TypeScript, tested with
+        Faultix v0.3.1 &mdash; MIT licensed. Built with TypeScript, tested with
         mocha and <code>@vscode/test-electron</code>, CI across Windows, macOS
         and Linux on Node&nbsp;20 and&nbsp;22.
         <a href="https://github.com/azyzex/faultix">github.com/azyzex/faultix</a>
