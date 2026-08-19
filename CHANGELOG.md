@@ -5,6 +5,62 @@ All notable changes to Faultix are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-08-19
+
+Faultix stops being a formatter and starts being a memory.
+
+Recording only failures meant it could say a command broke but never that it
+started working again. Recording successes too makes three questions
+answerable, and none of them can be answered by an agent, which starts every
+session cold and only sees the run it just performed.
+
+### Added
+
+- **Run ledger.** Every tracked command is recorded, passing or failing, in
+  `.ai-repair/runs.json`. Successful runs are filtered by the capture
+  classifier, so builds and test runs are kept and `cd` and `ls` are not.
+- **Fix correlation.** When a failure goes away, Faultix reports what was being
+  edited when it did — the overlap between the failing and passing working
+  trees, or their union when nothing overlaps. Briefs carry a
+  "What history says" section; the agent prompt leads with "You have fixed this
+  before" and the files involved. It is a heuristic and says so, and it flags
+  when commits landed in between.
+- **Flaky detection.** A command that passed *and* failed at the same commit
+  with a clean working tree cannot have been affected by a code change, so the
+  failure is flakiness, a race or an unstable environment. Reported at lower
+  confidence when the tree was dirty, and suppressed entirely when a fix was
+  recorded, since that explains the disagreement without invoking flakiness.
+- **What changed since it last passed.** The commit of the last passing run.
+- **MCP server.** `faultix-mcp` exposes the whole of the above to a coding
+  agent over the Model Context Protocol: `faultix_latest_failure`,
+  `faultix_search_failures`, `faultix_failure_history`,
+  `faultix_flaky_commands`, `faultix_command_stats` and
+  `faultix_recent_failures`. Read-only: it opens the files the extension wrote,
+  runs nothing and modifies nothing. See docs/MCP.md.
+- **Two commands:** Copy MCP Server Config, which emits a config pointing at
+  the installed server so it works as pasted, and Show Flaky Commands.
+- **Two settings:** `faultix.history.recordRuns` and
+  `faultix.history.maxRuns`.
+
+### Fixed
+
+- `output.mode: clipboardOnly` promises nothing is written to the workspace,
+  but the run ledger was being written anyway. It now honours the mode, at the
+  cost of the history features — which is the trade that setting asks for.
+- The agent prompt printed a "Context" heading with nothing beneath it.
+
+### Internal
+
+- `deriveHistory` was pure logic stranded in the `vscode` adapter, so neither
+  the CLI nor the MCP server could reach it; it now lives in `analyze/`.
+  Three front ends — the extension, `faultix-brief` and `faultix-mcp` — run the
+  same analysis code as a result.
+- The MCP protocol is implemented directly rather than through the SDK. It is
+  JSON-RPC 2.0 over stdio with four methods that matter, and adding a package
+  tree to serve read-only queries would break the zero-runtime-dependency
+  promise for no benefit.
+- 522 unit tests and 17 Extension Host tests.
+
 ## [0.2.3] - 2026-08-19
 
 Found by running the extension against a real workspace rather than a fixture.
@@ -178,6 +234,7 @@ control-code garbage.
 Initial working version: terminal, task and diagnostics capture; suspect
 ranking; fingerprinting; markdown and prompt output; tree view.
 
+[0.3.0]: https://github.com/azyzex/faultix/releases/tag/v0.3.0
 [0.2.3]: https://github.com/azyzex/faultix/releases/tag/v0.2.3
 [0.2.2]: https://github.com/azyzex/faultix/releases/tag/v0.2.2
 [0.2.1]: https://github.com/azyzex/faultix/releases/tag/v0.2.1
