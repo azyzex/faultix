@@ -23,6 +23,20 @@ export interface GitEvidence {
   /** Repository-relative paths with uncommitted changes. */
   changedFiles?: string[];
   diffStat?: string;
+
+  /**
+   * What has changed since a given commit, when the caller asked.
+   *
+   * "What changed since this last worked" is the first question anyone asks
+   * when something that used to pass starts failing, and it is pure
+   * bookkeeping to answer.
+   */
+  changesSince?: {
+    sha: string;
+    files: string[];
+    diffStat?: string;
+    commits?: number;
+  };
 }
 
 /** Cap on files listed, so a huge refactor does not swamp the brief. */
@@ -34,6 +48,8 @@ const MAX_DIFFSTAT_CHARS = 4000;
 export async function collectGitEvidence(args: {
   enabled: boolean;
   workspaceRoot: string | undefined;
+  /** Commit to diff against, usually the last one where this command passed. */
+  sinceSha?: string;
 }): Promise<GitEvidence> {
   if (!args.enabled || !args.workspaceRoot) {
     return { enabled: args.enabled, insideWorkTree: false };
@@ -53,14 +69,67 @@ export async function collectGitEvidence(args: {
     execGit(['diff', '--stat', 'HEAD'], cwd)
   ]);
 
+  const currentSha = sha.ok ? sha.stdout.trim() || undefined : undefined;
+
   return {
     enabled: true,
     insideWorkTree: true,
+    changesSince: await collectChangesSince(cwd, args.sinceSha),
     branch: branch.ok ? branch.stdout.trim() || undefined : undefined,
-    sha: sha.ok ? sha.stdout.trim() || undefined : undefined,
+    sha: currentSha,
     isDirty: status.ok ? status.stdout.trim().length > 0 : undefined,
     changedFiles: status.ok ? parsePorcelain(status.stdout) : undefined,
     diffStat: diffStat.ok ? diffStat.stdout.trim().slice(0, MAX_DIFFSTAT_CHARS) || undefined : undefined
+  };
+}
+
+/**
+ * Diffs the working tree against an earlier commit.
+ *
+ * Returns nothing when there is no earlier commit to compare with, when it is
+ * the commit we are already on with no local changes, or when git cannot
+ * resolve it - a commit from a branch that has since been rebased away is a
+ * normal thing to encounter, not an error worth surfacing.
+ */
+async function collectChangesSince(
+  cwd: string,
+  sinceSha: string | undefined
+): Promise<GitEvidence['changesSince']> {
+  if (!sinceSha) {
+    return undefined;
+  }
+
+  const exists = await execGit(['cat-file', '-e', `${sinceSha}^{commit}`], cwd);
+  if (!exists.ok) {
+    return undefined;
+  }
+
+  const [names, stat, count] = await Promise.all([
+    execGit(['diff', '--name-only', sinceSha], cwd),
+    execGit(['diff', '--stat', sinceSha], cwd),
+    execGit(['rev-list', '--count', `${sinceSha}..HEAD`], cwd)
+  ]);
+
+  const files = names.ok
+    ? names.stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .slice(0, MAX_CHANGED_FILES)
+    : [];
+
+  const commits = count.ok ? Number(count.stdout.trim()) : undefined;
+
+  // Nothing changed and no commits landed: there is nothing to report.
+  if (!files.length && !commits) {
+    return undefined;
+  }
+
+  return {
+    sha: sinceSha,
+    files,
+    diffStat: stat.ok ? stat.stdout.trim().slice(0, MAX_DIFFSTAT_CHARS) || undefined : undefined,
+    commits: Number.isFinite(commits) ? commits : undefined
   };
 }
 

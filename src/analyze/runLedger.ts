@@ -397,7 +397,8 @@ export function shouldTrackRun(commandLine: string, ok: boolean): boolean {
 export function deriveHistory(
   ledger: RunLedger,
   commandLine: string,
-  signature: string
+  signature: string,
+  changesSincePass?: IncidentHistory['changesSincePass']
 ): IncidentHistory | undefined {
   const key = commandKeyOf(commandLine);
 
@@ -423,7 +424,8 @@ export function deriveHistory(
     // commit with a dirty tree — which is exactly what a fix looks like. When
     // one was recorded, saying "this is flaky" as well would contradict it.
     // A clean-tree disagreement is different: the code genuinely did not change.
-    flaky: flaky && (flaky.confidence === 'high' || !resolution) ? flaky.confidence : undefined
+    flaky: flaky && (flaky.confidence === 'high' || !resolution) ? flaky.confidence : undefined,
+    changesSincePass
   };
 
   // Nothing worth saying is still nothing; keep the section off the brief
@@ -433,7 +435,8 @@ export function deriveHistory(
     history.priorFix !== undefined ||
     history.lastPassedAt !== undefined ||
     history.passRate !== undefined ||
-    history.flaky !== undefined;
+    history.flaky !== undefined ||
+    history.changesSincePass !== undefined;
 
   return hasAnything ? history : undefined;
 }

@@ -4,6 +4,7 @@ import {
   appendRun,
   coerceLedger,
   commandKeyOf,
+  deriveHistory,
   detectFlakyCommands,
   emptyLedger,
   findAllResolutions,
@@ -316,5 +317,55 @@ suite('runLedger/statistics', () => {
 
   test('counts occurrences of a signature', () => {
     assert.strictEqual(occurrencesOf(ledger, 's').length, 1);
+  });
+});
+
+suite('runLedger/deriveHistory', () => {
+  const ledger = ledgerOf(
+    { at: '2026-01-01T00:00:00.000Z', ok: true, gitSha: 'aaa111' },
+    { at: '2026-01-02T00:00:00.000Z', ok: false, signature: 'sig', gitSha: 'bbb222' }
+  );
+
+  test('reports what the ledger knows', () => {
+    const history = deriveHistory(ledger, 'npm test', 'sig');
+    assert.ok(history);
+    assert.strictEqual(history.lastPassedSha, 'aaa111');
+    assert.strictEqual(history.totalRuns, 2);
+  });
+
+  test('passes the since-last-pass diff through', () => {
+    const history = deriveHistory(ledger, 'npm test', 'sig', {
+      sha: 'aaa111',
+      files: ['src/a.ts', 'src/b.ts'],
+      commits: 2
+    });
+    assert.ok(history?.changesSincePass, 'the diff should be carried through');
+    assert.strictEqual(history.changesSincePass.files.length, 2);
+    assert.strictEqual(history.changesSincePass.commits, 2);
+  });
+
+  test('says nothing when the ledger knows nothing', () => {
+    assert.strictEqual(deriveHistory(emptyLedger(), 'npm test', 'sig'), undefined);
+  });
+
+  test('does not call a command flaky when a fix explains the disagreement', () => {
+    // A pass and a fail at one commit with a dirty tree is what a fix looks
+    // like; reporting flakiness as well would contradict it.
+    const fixed = ledgerOf(
+      { at: '2026-01-01T00:00:00.000Z', ok: false, signature: 'sig', gitSha: 'aaa', gitDirty: true },
+      { at: '2026-01-02T00:00:00.000Z', ok: true, gitSha: 'aaa', gitDirty: true }
+    );
+    const history = deriveHistory(fixed, 'npm test', 'sig');
+    assert.ok(history?.priorFix, 'the fix is reported');
+    assert.strictEqual(history.flaky, undefined, 'and flakiness is not');
+  });
+
+  test('still reports flakiness when the tree was clean', () => {
+    // A clean tree means the code provably did not change, which no fix explains.
+    const flaky = ledgerOf(
+      { at: '2026-01-01T00:00:00.000Z', ok: false, signature: 'sig', gitSha: 'aaa', gitDirty: false },
+      { at: '2026-01-02T00:00:00.000Z', ok: true, gitSha: 'aaa', gitDirty: false }
+    );
+    assert.strictEqual(deriveHistory(flaky, 'npm test', 'sig')?.flaky, 'high');
   });
 });

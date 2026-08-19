@@ -136,6 +136,12 @@ export interface IncidentView {
     totalRuns?: number;
     /** Set when this command has disagreed with itself. */
     flaky?: 'high' | 'low';
+    /** What changed between the last passing run and now. */
+    changesSincePass?: {
+      sha: string;
+      files: string[];
+      commits?: number;
+    };
   };
 }
 
@@ -237,6 +243,20 @@ export function renderHistory(view: IncidentView): string[] {
         ? '- **Unreliable:** this command has both passed and failed at the same commit with a clean tree.'
         : '- **Possibly unreliable:** this command has both passed and failed recently, with a dirty tree.'
     );
+  }
+
+  const changes = history.changesSincePass;
+  if (changes?.files.length) {
+    const commits = changes.commits ? ` and ${changes.commits} commit(s)` : '';
+    lines.push(
+      `- **Changed since it last passed:** ${changes.files.length} file(s)${commits}, against \`${changes.sha.slice(0, 8)}\`.`
+    );
+    for (const file of changes.files.slice(0, 8)) {
+      lines.push(`  - \`${file}\``);
+    }
+    if (changes.files.length > 8) {
+      lines.push(`  - ... and ${changes.files.length - 8} more`);
+    }
   }
 
   if (history.passRate !== undefined && history.totalRuns) {
@@ -440,6 +460,24 @@ export function buildRepairPrompt(view: IncidentView): string {
     }
     if (priorFix.commitsInBetween) {
       push('', 'Commits landed between the failure and the fix, so that list is incomplete.');
+    }
+    push('');
+  }
+
+  const sincePass = view.history?.changesSincePass;
+  if (sincePass?.files.length) {
+    push('## What changed since this last worked', '');
+    push(
+      `${sincePass.files.length} file(s) differ from \`${sincePass.sha.slice(0, 8)}\`, the commit where this command last passed` +
+        (sincePass.commits ? `, across ${sincePass.commits} commit(s)` : '') +
+        '. The cause is very likely among them.'
+    );
+    push('');
+    for (const file of sincePass.files.slice(0, 20)) {
+      push(`- \`${file}\``);
+    }
+    if (sincePass.files.length > 20) {
+      push(`- ... and ${sincePass.files.length - 20} more`);
     }
     push('');
   }

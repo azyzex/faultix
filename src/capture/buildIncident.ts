@@ -14,7 +14,7 @@ import * as vscode from 'vscode';
 import { analyzeFailure } from '../analyze/pipeline';
 import type { AnalysisOptions, AnalyzeInput } from '../analyze/pipeline';
 import { collectGitEvidence } from '../analyze/git';
-import { deriveHistory } from '../analyze/runLedger';
+import { commandKeyOf, deriveHistory, lastPassingRun } from '../analyze/runLedger';
 import type { RunLedger } from '../analyze/runLedger';
 import type { IncidentKind } from '../analyze/classify';
 import type { FaultixConfig } from '../core/config';
@@ -65,7 +65,20 @@ export async function buildIncident(input: BuildIncidentInput): Promise<Incident
   const trusted = vscode.workspace.isTrusted;
 
   const diagnostics = snapshotDiagnostics(config.maxDiagnostics, workspaceRoot);
-  const git = await collectGitEvidence({ enabled: config.gitEnabled && trusted, workspaceRoot });
+
+  // Looked up before collecting git evidence so the diff can be taken in the
+  // same pass: "what changed since this last worked" is the first question
+  // anyone asks when something that used to pass starts failing.
+  const sinceSha =
+    input.ledger && input.commandLine
+      ? lastPassingRun(input.ledger, commandKeyOf(input.commandLine))?.gitSha
+      : undefined;
+
+  const git = await collectGitEvidence({
+    enabled: config.gitEnabled && trusted,
+    workspaceRoot,
+    sinceSha
+  });
 
   const analyzeInput: AnalyzeInput = {
     trigger: input.trigger,
@@ -89,7 +102,12 @@ export async function buildIncident(input: BuildIncidentInput): Promise<Incident
   // History depends on the fingerprint, which only exists once the incident has
   // been assembled, so it is attached afterwards rather than passed in.
   if (input.ledger && input.commandLine) {
-    incident.history = deriveHistory(input.ledger, input.commandLine, incident.fingerprint.signature);
+    incident.history = deriveHistory(
+      input.ledger,
+      input.commandLine,
+      incident.fingerprint.signature,
+      git.changesSince
+    );
   }
 
   return incident;
